@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.masu.dcs.mapper.SysDocTemplateMapper">
+
+    <resultMap id="BaseResultMap" type="cn.masu.dcs.entity.SysDocTemplate">
+            <id property="id" column="id" jdbcType="BIGINT"/>
+            <result property="templateName" column="template_name" jdbcType="VARCHAR"/>
+            <result property="templateCode" column="template_code" jdbcType="VARCHAR"/>
+            <result property="targetKvConfig" column="target_kv_config" jdbcType="OTHER"/>
+            <result property="targetTableConfig" column="target_table_config" jdbcType="OTHER"/>
+            <result property="ruleConfig" column="rule_config" jdbcType="OTHER"/>
+            <result property="status" column="status" jdbcType="TINYINT"/>
+            <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
+            <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,template_name,template_code,
+        target_kv_config,target_table_config,rule_config,
+        status,create_time,update_time
+    </sql>
+</mapper>

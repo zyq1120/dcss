@@ -1,0 +1,3 @@
+spring:
+  application:
+    name: document_classification_system_springboot
