@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>审核功能测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 30px;
+        }
+
+        .left-panel, .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .section {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .preview-frame {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #fafafa;
+        }
+
+        .result-box {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .field-editor {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+
+        .field-row {
+            display: grid;
+            grid-template-columns: 150px 1fr 80px;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .field-row input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .field-row button {
+            padding: 8px;
+            background: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .add-field-btn {
+            background: #48dbfb;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 审核工作台</h1>
+            <p>文件预览、AI结果展示、字段修改</p>
+        </div>
+
+        <div class="content">
+            <!-- 左侧面板 -->
+            <div class="left-panel">
+                <!-- 配置区 -->
+                <div class="section">
+                    <h2>⚙️ 配置</h2>
+                    <div class="form-group">
+                        <label>后端地址</label>
+                        <input type="text" id="baseUrl" value="http://localhost:8080">
+                    </div>
+                    <div class="form-group">
+                        <label>Token</label>
+                        <input type="text" id="token" placeholder="Bearer eyJhbGc...">
+                    </div>
+                    <div class="form-group">
+                        <label>文件ID</label>
+                        <input type="number" id="fileId" placeholder="输入文件ID">
+                    </div>
+                </div>
+
+                <!-- 文件预览 -->
+                <div class="section">
+                    <h2>👁️ 文件预览</h2>
+                    <button class="btn btn-primary" onclick="loadFilePreview()">加载预览</button>
+                    <div style="margin-top: 15px;">
+                        <iframe id="previewFrame" class="preview-frame"></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧面板 -->
+            <div class="right-panel">
+                <!-- AI处理结果 -->
+                <div class="section">
+                    <h2>🤖 AI处理结果</h2>
+                    <button class="btn btn-primary" onclick="loadProcessResult()">加载AI结果</button>
+                    <div style="margin-top: 15px;">
+                        <div id="resultInfo" style="margin-bottom: 10px;"></div>
+                        <div id="resultBox" class="result-box"></div>
+                    </div>
+                </div>
+
+                <!-- 字段编辑 -->
+                <div class="section">
+                    <h2>✏️ 字段编辑</h2>
+                    <div id="fieldEditor" class="field-editor">
+                        <div id="fieldList"></div>
+                        <button class="add-field-btn" onclick="addFieldRow()">+ 添加字段</button>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveFields()">保存修改</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+
+        // 加载文件预览
+        async function loadFilePreview() {
+            const baseUrl = document.getElementById('baseUrl').value;
+            const token = document.getElementById('token').value;
+            const fileId = document.getElementById('fileId').value;
+
+            if (!fileId) {
+                alert('请输入文件ID');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseUrl}/api/audit/preview/${fileId}`, {
+                    headers: {
+                        'Authorization': token
+                    }
+                });
+
+                const result = await response.json();
+                if (result.code === 200) {
+                    document.getElementById('previewFrame').src = result.data;
+                    showToast('预览加载成功', 'success');
+                } else {
+                    showToast('加载失败: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showToast('请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 加载AI处理结果
+        async function loadProcessResult() {
+            const baseUrl = document.getElementById('baseUrl').value;
+            const token = document.getElementById('token').value;
+            const fileId = document.getElementById('fileId').value;
+
+            if (!fileId) {
+                alert('请输入文件ID');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseUrl}/api/audit/result/${fileId}`, {
+                    headers: {
+                        'Authorization': token
+                    }
+                });
+
+                const result = await response.json();
+                if (result.code === 200) {
+                    currentData = result.data;
+                    displayResult(result.data);
+                    loadFieldsToEditor(result.data.kvData || {});
+                    showToast('结果加载成功', 'success');
+                } else {
+                    showToast('加载失败: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showToast('请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 显示结果
+        function displayResult(data) {
+            const infoHtml = `
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <span class="status-badge status-success">置信度: ${(data.confidence * 100).toFixed(2)}%</span>
+                    <span class="status-badge ${data.status === 0 ? 'status-warning' : 'status-success'}">
+                        状态: ${getStatusName(data.status)}
+                    </span>
+                    <span class="status-badge status-success">字段数: ${Object.keys(data.kvData || {}).length}</span>
+                </div>
+            `;
+            document.getElementById('resultInfo').innerHTML = infoHtml;
+            document.getElementById('resultBox').textContent = JSON.stringify(data, null, 2);
+        }
+
+        // 加载字段到编辑器
+        function loadFieldsToEditor(kvData) {
+            const fieldList = document.getElementById('fieldList');
+            fieldList.innerHTML = '';
+
+            Object.entries(kvData).forEach(([key, value]) => {
+                addFieldRow(key, value);
+            });
+        }
+
+        // 添加字段行
+        function addFieldRow(key = '', value = '') {
+            const fieldList = document.getElementById('fieldList');
+            const rowId = 'field-' + Date.now();
+
+            const row = document.createElement('div');
+            row.className = 'field-row';
+            row.id = rowId;
+            row.innerHTML = `
+                <input type="text" placeholder="字段名" value="${key}" data-type="key">
+                <input type="text" placeholder="字段值" value="${value}" data-type="value">
+                <button onclick="removeFieldRow('${rowId}')">删除</button>
+            `;
+
+            fieldList.appendChild(row);
+        }
+
+        // 删除字段行
+        function removeFieldRow(rowId) {
+            document.getElementById(rowId).remove();
+        }
+
+        // 保存字段
+        async function saveFields() {
+            const baseUrl = document.getElementById('baseUrl').value;
+            const token = document.getElementById('token').value;
+            const fileId = document.getElementById('fileId').value;
+
+            if (!fileId) {
+                alert('请输入文件ID');
+                return;
+            }
+
+            // 收集字段
+            const fields = {};
+            document.querySelectorAll('.field-row').forEach(row => {
+                const key = row.querySelector('[data-type="key"]').value.trim();
+                const value = row.querySelector('[data-type="value"]').value.trim();
+                if (key) {
+                    fields[key] = value;
+                }
+            });
+
+            if (Object.keys(fields).length === 0) {
+                alert('请至少添加一个字段');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseUrl}/api/audit/modify/${fileId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(fields)
+                });
+
+                const result = await response.json();
+                if (result.code === 200) {
+                    showToast('保存成功', 'success');
+                    // 重新加载结果
+                    setTimeout(() => loadProcessResult(), 500);
+                } else {
+                    showToast('保存失败: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showToast('请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 获取状态名称
+        function getStatusName(status) {
+            const statusMap = {
+                0: '待校对',
+                1: '已校对',
+                2: '已确认'
+            };
+            return statusMap[status] || '未知';
+        }
+
+        // 显示提示
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                background: ${type === 'success' ? '#10b981' : '#ef4444'};
+                color: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // 添加动画样式
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            @keyframes slideOut {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
+

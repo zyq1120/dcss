@@ -1,0 +1,34 @@
+# AI服务配置示例
+# 将此配置添加到application.yaml
+
+# AI服务配置
+ai:
+  service:
+    # AI服务基础URL
+    base-url: http://localhost:5000
+
+    # 是否启用LLM兜底功能
+    enable-llm-fallback: true
+
+    # 每日预算（元）
+    daily-budget: 20.0
+
+    # OCR置信度阈值（低于此值触发LLM兜底）
+    ocr-confidence-threshold: 0.7
+
+    # NLP置信度阈值（低于此值触发LLM兜底）
+    nlp-confidence-threshold: 0.75
+
+    # 默认LLM模型
+    llm-model: qwen-vl
+    # 可选值: qwen-vl, gpt-4-vision, claude-3-opus, cogvlm
+
+# 废弃的配置（保留兼容性）
+ocr:
+  service:
+    url: http://localhost:5000/api/v1/ocr/recognize
+
+nlp:
+  service:
+    url: http://localhost:5000/api/v1/nlp/extract
+

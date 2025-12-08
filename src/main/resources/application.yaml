@@ -1,3 +1,68 @@
 spring:
+  main:
+    allow-bean-definition-overriding: true
   application:
-    name: document_classification_system_springboot
+    name: dcss
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://119.45.164.129:3306/dcs?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&autoReconnect=true&failOverReadOnly=false&maxReconnects=10
+    username: root
+    password: newpassword
+
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+    default-property-inclusion: non_null
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: cn.masu.dcs.**.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+jwt:
+  secret: your-256-bit-secret-your-256-bit-secret-your-256-bit-secret
+  expiration: 86400000
+
+minio:
+  endpoint: http://119.45.164.129:9000  # MinIO 的访问 URL（API 服务地址）
+  access-key: minio                   # MinIO 的 Access Key
+  secret-key: minio123                # MinIO 的 Secret Key（密码）
+  bucket-name: document-files         # 默认使用的存储桶名称
+  url-prefix: http://119.45.164.129:9000  # 文件访问的基础 URL（用于拼接文件访问地址）
+
+# AI服务配置
+ai:
+  service:
+    # Python AI服务地址
+    base-url: http://localhost:5000
+    # 启用LLM兜底
+    enable-llm-fallback: true
+    # 每日预算（人民币）
+    daily-budget: 20.0
+    # OCR置信度阈值（低于此值触发LLM兜底）
+    ocr-confidence-threshold: 0.7
+    # NLP置信度阈值（低于此值触发LLM兜底）
+    nlp-confidence-threshold: 0.75
+    # 默认LLM模型
+    llm-model: qwen-vl
+    # 默认LLM提供商（qwen/gemini/openai）
+    llm-provider: qwen
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+logging:
+  level:
+    cn.masu.dcs: debug
+    com.baomidou.mybatisplus: debug

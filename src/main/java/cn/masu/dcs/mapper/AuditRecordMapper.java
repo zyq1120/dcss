@@ -2,17 +2,14 @@ package cn.masu.dcs.mapper;
 
 import cn.masu.dcs.entity.AuditRecord;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Mapper;
 
 /**
-* @author zyq
-* @description 针对表【audit_record(人工审核/校对记录)】的数据库操作Mapper
-* @createDate 2025-11-30 11:18:59
-* @Entity cn.masu.dcs.entity.AuditRecord
-*/
+ * 审核记录Mapper
+ * @author System
+ */
+@Mapper
 public interface AuditRecordMapper extends BaseMapper<AuditRecord> {
 
 }
-
-
-
 

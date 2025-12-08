@@ -1,0 +1,155 @@
+# ========================================
+# 智能文档处理系统 - Docker Compose配置
+# 一键部署完整系统（应用+数据库+MinIO+Redis）
+# ========================================
+
+version: '3.8'
+
+services:
+  # ========================================
+  # MySQL数据库
+  # ========================================
+  mysql:
+    image: mysql:8.0
+    container_name: dcs-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: dcs
+      MYSQL_USER: dcs_user
+      MYSQL_PASSWORD: dcs_password
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./src/main/resources/static/dcs.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./src/main/resources/db/optimization/add_indexes.sql:/docker-entrypoint-initdb.d/optimization.sql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    networks:
+      - dcs-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========================================
+  # Redis缓存
+  # ========================================
+  redis:
+    image: redis:7-alpine
+    container_name: dcs-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --requirepass redis123456
+    networks:
+      - dcs-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ========================================
+  # MinIO对象存储
+  # ========================================
+  minio:
+    image: minio/minio:latest
+    container_name: dcs-minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"    # API端口
+      - "9001:9001"    # Console端口
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - dcs-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ========================================
+  # Spring Boot应用
+  # ========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dcs-app
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      # 数据库配置
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/dcs?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: dcs_user
+      SPRING_DATASOURCE_PASSWORD: dcs_password
+
+      # Redis配置
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: redis123456
+
+      # MinIO配置
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+
+      # JVM参数
+      JAVA_OPTS: "-Xms512m -Xmx1024m -XX:+UseG1GC"
+
+      # 应用配置
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8080
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - dcs-network
+    volumes:
+      - app-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+# ========================================
+# 网络配置
+# ========================================
+networks:
+  dcs-network:
+    driver: bridge
+
+# ========================================
+# 数据卷配置
+# ========================================
+volumes:
+  mysql-data:
+    driver: local
+  redis-data:
+    driver: local
+  minio-data:
+    driver: local
+  app-logs:
+    driver: local
+

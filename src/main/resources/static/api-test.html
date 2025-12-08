@@ -1,0 +1,1732 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 接口测试 - DCS System</title>
+    <style>
+        :root {
+            --notion-bg: #ffffff;
+            --notion-gray-bg: #f7f6f3;
+            --notion-dark-bg: #37352f;
+            --notion-text: #37352f;
+            --notion-text-gray: #787774;
+            --notion-border: rgba(55, 53, 47, 0.09);
+            --notion-hover: rgba(55, 53, 47, 0.08);
+            --notion-blue: #2383e2;
+            --notion-red: #eb5757;
+            --notion-green: #0f7b6c;
+            --notion-shadow: rgba(15, 15, 15, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--notion-gray-bg);
+            color: var(--notion-text);
+            line-height: 1.5;
+        }
+
+        .topbar {
+            background: var(--notion-bg);
+            border-bottom: 1px solid var(--notion-border);
+            padding: 12px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--notion-text);
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--notion-text-gray);
+            font-size: 14px;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 4px;
+            background: var(--notion-gray-bg);
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 40px 96px;
+        }
+
+        .page-title {
+            font-size: 40px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--notion-text);
+        }
+
+        .page-subtitle {
+            font-size: 14px;
+            color: var(--notion-text-gray);
+            margin-bottom: 32px;
+        }
+
+        .sidebar-layout {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 40px;
+        }
+
+        .sidebar {
+            position: sticky;
+            top: 80px;
+            height: fit-content;
+        }
+
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+
+        .sidebar-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--notion-text-gray);
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-item {
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--notion-text);
+            transition: background 0.1s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar-item:hover {
+            background: var(--notion-hover);
+        }
+
+        .sidebar-item.active {
+            background: var(--notion-hover);
+            font-weight: 600;
+        }
+
+        .main-content {
+            background: var(--notion-bg);
+            border-radius: 4px;
+            border: 1px solid var(--notion-border);
+            overflow: hidden;
+        }
+
+        .section {
+            padding: 32px;
+            border-bottom: 1px solid var(--notion-border);
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--notion-text);
+        }
+
+        .section-description {
+            font-size: 14px;
+            color: var(--notion-text-gray);
+            margin-bottom: 24px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--notion-text);
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--notion-border);
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+            background: var(--notion-bg);
+            color: var(--notion-text);
+            transition: border-color 0.1s ease, box-shadow 0.1s ease;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: var(--notion-blue);
+            box-shadow: 0 0 0 3px rgba(35, 131, 226, 0.1);
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--notion-blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1a6cbd;
+        }
+
+        .btn-secondary {
+            background: var(--notion-gray-bg);
+            color: var(--notion-text);
+        }
+
+        .btn-secondary:hover {
+            background: var(--notion-hover);
+        }
+
+        .btn-danger {
+            background: var(--notion-red);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #d63838;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .response-box {
+            background: var(--notion-dark-bg);
+            color: #e6e6e6;
+            padding: 16px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin-top: 16px;
+        }
+
+        .response-box::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .response-box::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .response-box::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: rgba(15, 123, 108, 0.1);
+            color: var(--notion-green);
+        }
+
+        .badge-error {
+            background: rgba(235, 87, 87, 0.1);
+            color: var(--notion-red);
+        }
+
+        .badge-info {
+            background: rgba(35, 131, 226, 0.1);
+            color: var(--notion-blue);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--notion-dark-bg);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px var(--notion-shadow);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--notion-border);
+            margin: 24px 0;
+        }
+
+        .file-upload-zone {
+            border: 2px dashed var(--notion-border);
+            border-radius: 4px;
+            padding: 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .file-upload-zone:hover {
+            border-color: var(--notion-blue);
+            background: rgba(35, 131, 226, 0.05);
+        }
+
+        .file-upload-zone.dragover {
+            border-color: var(--notion-blue);
+            background: rgba(35, 131, 226, 0.1);
+        }
+
+        .preview-frame {
+            width: 100%;
+            height: 400px;
+            border: 1px solid var(--notion-border);
+            border-radius: 4px;
+            margin-top: 16px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--notion-border);
+        }
+
+        .table th {
+            font-weight: 600;
+            color: var(--notion-text-gray);
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .callout {
+            background: var(--notion-gray-bg);
+            border-left: 3px solid var(--notion-blue);
+            padding: 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .callout-warning {
+            border-left-color: #ffa500;
+            background: rgba(255, 165, 0, 0.05);
+        }
+
+        .callout-error {
+            border-left-color: var(--notion-red);
+            background: rgba(235, 87, 87, 0.05);
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: static;
+                display: flex;
+                gap: 16px;
+                overflow-x: auto;
+            }
+
+            .container {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <div class="logo">📚 DCS API 测试</div>
+            <div class="breadcrumb">
+                <span>智能文档处理系统</span>
+                <span>/</span>
+                <span>接口测试平台</span>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <button class="btn btn-secondary" onclick="viewErrorLog()" title="查看错误日志" style="padding: 6px 12px;">
+                🐛 错误日志 <span id="errorCount" class="badge badge-error" style="margin-left: 4px; display: none;">0</span>
+            </button>
+            <button class="btn btn-secondary" onclick="downloadErrorLog()" title="下载错误日志" style="padding: 6px 12px;">
+                💾 下载日志
+            </button>
+            <button class="btn btn-secondary" onclick="clearErrorLog()" title="清空错误日志" style="padding: 6px 12px;">
+                🗑️ 清空
+            </button>
+            <div class="user-info">
+                <span id="currentUser">未登录</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1 class="page-title">API 接口测试平台</h1>
+        <p class="page-subtitle">完整的接口测试工具，支持所有模块的 API 调用</p>
+
+        <div class="sidebar-layout">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <div class="sidebar-title">基础配置</div>
+                    <div class="sidebar-item active" onclick="showSection('config')">⚙️ 系统配置</div>
+                </div>
+                <div class="sidebar-section">
+                    <div class="sidebar-title">认证模块</div>
+                    <div class="sidebar-item" onclick="showSection('auth')">🔐 用户认证</div>
+                </div>
+                <div class="sidebar-section">
+                    <div class="sidebar-title">核心模块</div>
+                    <div class="sidebar-item" onclick="showSection('file')">📁 文件管理</div>
+                    <div class="sidebar-item" onclick="showSection('ai')">🤖 AI 处理</div>
+                    <div class="sidebar-item" onclick="showSection('audit')">✅ 审核管理</div>
+                    <div class="sidebar-item" onclick="showSection('user')">👥 用户管理</div>
+                    <div class="sidebar-item" onclick="showSection('role')">🎭 角色管理</div>
+                    <div class="sidebar-item" onclick="showSection('template')">📋 模板管理</div>
+                    <div class="sidebar-item" onclick="showSection('dashboard')">📊 数据面板</div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Config Section -->
+                <div id="section-config" class="section">
+                    <h2 class="section-title">⚙️ 系统配置</h2>
+                    <p class="section-description">配置后端服务地址和认证信息</p>
+
+                    <div class="form-group">
+                        <label class="form-label">后端地址</label>
+                        <input type="text" id="baseUrl" class="form-input" value="http://localhost:8080" placeholder="http://localhost:8080">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Authorization Token</label>
+                        <input type="text" id="globalToken" class="form-input" placeholder="登录后自动填充，或手动输入 Bearer token">
+                    </div>
+
+                    <div class="callout">
+                        <strong>💡 提示：</strong> 首次使用请先在「用户认证」模块登录，系统会自动保存 Token
+                    </div>
+                </div>
+
+                <!-- Auth Section -->
+                <div id="section-auth" class="section" style="display: none;">
+                    <h2 class="section-title">🔐 用户认证</h2>
+                    <p class="section-description">用户登录、注册和信息获取</p>
+
+                    <!-- Login -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">登录</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">用户名</label>
+                            <input type="text" id="loginUsername" class="form-input" value="admin" placeholder="用户名">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">密码</label>
+                            <input type="password" id="loginPassword" class="form-input" value="admin123" placeholder="密码">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="login()">
+                            <span>登录</span>
+                        </button>
+                    </div>
+                    <div id="loginResponse" class="response-box" style="display: none;"></div>
+
+                    <div class="divider"></div>
+
+                    <!-- Register -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">注册</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">用户名</label>
+                            <input type="text" id="registerUsername" class="form-input" placeholder="用户名 (4-20字符)">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">密码</label>
+                            <input type="password" id="registerPassword" class="form-input" placeholder="密码 (6-20字符)">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">昵称</label>
+                            <input type="text" id="registerNickname" class="form-input" placeholder="昵称（可选）">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">邮箱</label>
+                            <input type="email" id="registerEmail" class="form-input" placeholder="邮箱（可选）">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="register()">注册</button>
+                    </div>
+                    <div id="registerResponse" class="response-box" style="display: none;"></div>
+
+                    <div class="divider"></div>
+
+                    <!-- Get User Info -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">获取当前用户信息</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary" onclick="getCurrentUser()">获取用户信息</button>
+                        <button class="btn btn-danger" onclick="logout()">登出</button>
+                    </div>
+                    <div id="userInfoResponse" class="response-box" style="display: none;"></div>
+                </div>
+
+                <!-- File Section -->
+                <div id="section-file" class="section" style="display: none;">
+                    <h2 class="section-title">📁 文件管理</h2>
+                    <p class="section-description">文件上传、查询、下载和删除</p>
+
+                    <!-- Upload File -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">上传文件</h3>
+                    <div class="file-upload-zone" id="fileUploadZone" onclick="document.getElementById('fileInput').click()">
+                        <div style="font-size: 48px; margin-bottom: 8px;">📤</div>
+                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">点击或拖拽文件到此处上传</div>
+                        <div style="font-size: 14px; color: var(--notion-text-gray);">支持 PDF、JPG、PNG 等格式</div>
+                        <input type="file" id="fileInput" style="display: none;" onchange="uploadFile()">
+                    </div>
+                    <div id="uploadResponse" class="response-box" style="display: none;"></div>
+
+                    <div class="divider"></div>
+
+                    <!-- Query Files -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">查询文件列表</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">当前页</label>
+                            <input type="number" id="filePage" class="form-input" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">每页数量</label>
+                            <input type="number" id="fileSize" class="form-input" value="10" min="1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">处理状态</label>
+                            <select id="fileStatus" class="form-select">
+                                <option value="">全部</option>
+                                <option value="0">待处理</option>
+                                <option value="1">队列中</option>
+                                <option value="2">处理中</option>
+                                <option value="3">待人工</option>
+                                <option value="4">已归档</option>
+                                <option value="5">失败</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">文件名</label>
+                            <input type="text" id="fileName" class="form-input" placeholder="搜索文件名">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="getFileList()">查询文件</button>
+                    </div>
+                    <div id="fileListResponse" class="response-box" style="display: none;"></div>
+
+                    <div class="divider"></div>
+
+                    <!-- Get File Detail -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">获取文件详情</h3>
+                    <div class="form-group">
+                        <label class="form-label">文件 ID</label>
+                        <input type="text" id="fileDetailId" class="form-input" placeholder="输入文件 ID">
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary" onclick="getFileDetail()">获取详情</button>
+                    </div>
+                    <div id="fileDetailResponse" class="response-box" style="display: none;"></div>
+                </div>
+
+                <!-- AI Section -->
+                <div id="section-ai" class="section" style="display: none;">
+                    <h2 class="section-title">🤖 AI 处理</h2>
+                    <p class="section-description">调用 Python AI 服务进行 OCR、NLP 和 LLM 处理</p>
+
+                    <div class="callout callout-warning">
+                        <strong>⚠️ 注意：</strong> 需要先上传文件或提供文本内容才能进行 AI 处理
+                    </div>
+
+                    <!-- AI Process -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">文件 AI 处理</h3>
+                    <div class="form-group">
+                        <label class="form-label">文件 ID（从文件管理获取）</label>
+                        <input type="text" id="aiFileId" class="form-input" placeholder="输入已上传的文件 ID">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">或直接输入 Base64 文件内容</label>
+                        <textarea id="aiFileContent" class="form-textarea" placeholder="data:image/jpeg;base64,/9j/4AAQ..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">文件名</label>
+                        <input type="text" id="aiFileName" class="form-input" placeholder="test.pdf">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">
+                                <input type="checkbox" id="aiUseLlm" checked> 启用 LLM 兜底
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">
+                                <input type="checkbox" id="aiLlmImage"> 使用多模态 LLM（直接读图）
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">
+                                <input type="checkbox" id="aiEnhanceImage" checked> 图像增强
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">
+                                <input type="checkbox" id="aiDetectTable" checked> 表格检测
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">LLM Provider</label>
+                            <select id="aiLlmProvider" class="form-select">
+                                <option value="">自动</option>
+                                <option value="qwen" selected>Qwen</option>
+                                <option value="gemini">Gemini</option>
+                                <option value="openai">OpenAI</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">LLM Model</label>
+                            <input type="text" id="aiLlmModel" class="form-input" placeholder="留空使用默认">
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="processAI()">
+                            <span id="aiProcessBtn">开始 AI 处理</span>
+                        </button>
+                    </div>
+                    <div id="aiResponse" class="response-box" style="display: none;"></div>
+                </div>
+
+                <!-- Audit Section -->
+                <div id="section-audit" class="section" style="display: none;">
+                    <h2 class="section-title">✅ 审核管理</h2>
+                    <p class="section-description">文件审核、字段修改和审核记录管理</p>
+
+                    <!-- Get Preview URL -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">获取文件预览</h3>
+                    <div class="form-group">
+                        <label class="form-label">文件 ID</label>
+                        <input type="text" id="auditFileId" class="form-input" placeholder="输入文件 ID">
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="getFilePreview()">获取预览链接</button>
+                    </div>
+                    <iframe id="previewFrame" class="preview-frame" style="display: none;"></iframe>
+                    <div id="previewResponse" class="response-box" style="display: none;"></div>
+
+                    <div class="divider"></div>
+
+                    <!-- Get AI Result -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">获取 AI 处理结果</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary" onclick="getAIResult()">获取结果</button>
+                    </div>
+                    <div id="aiResultResponse" class="response-box" style="display: none;"></div>
+
+                    <div class="divider"></div>
+
+                    <!-- Modify Fields -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">修改字段</h3>
+                    <div class="form-group">
+                        <label class="form-label">字段数据（JSON 格式）</label>
+                        <textarea id="modifyFields" class="form-textarea" placeholder='{"studentName": "张三", "studentId": "2021001"}'></textarea>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="modifyFields()">保存修改</button>
+                    </div>
+                    <div id="modifyResponse" class="response-box" style="display: none;"></div>
+
+                    <div class="divider"></div>
+
+                    <!-- Submit Audit -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">提交审核</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">审核状态</label>
+                            <select id="auditStatus" class="form-select">
+                                <option value="0">待审核</option>
+                                <option value="1">审核中</option>
+                                <option value="2" selected>已通过</option>
+                                <option value="3">已驳回</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">审核意见</label>
+                            <input type="text" id="auditComment" class="form-input" placeholder="审核意见">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="submitAudit()">提交审核</button>
+                    </div>
+                    <div id="auditSubmitResponse" class="response-box" style="display: none;"></div>
+
+                    <div class="divider"></div>
+
+                    <!-- Audit History -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">审核历史</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary" onclick="getAuditHistory()">获取审核历史</button>
+                    </div>
+                    <div id="auditHistoryResponse" class="response-box" style="display: none;"></div>
+                </div>
+
+                <!-- User Section -->
+                <div id="section-user" class="section" style="display: none;">
+                    <h2 class="section-title">👥 用户管理</h2>
+                    <p class="section-description">用户列表查询、创建和管理</p>
+
+                    <!-- User List -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">用户列表</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">当前页</label>
+                            <input type="number" id="userPage" class="form-input" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">每页数量</label>
+                            <input type="number" id="userSize" class="form-input" value="10" min="1">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="getUserList()">查询用户</button>
+                    </div>
+                    <div id="userListResponse" class="response-box" style="display: none;"></div>
+
+                    <div class="divider"></div>
+
+                    <!-- Create User -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">创建用户</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">用户名</label>
+                            <input type="text" id="createUsername" class="form-input" placeholder="用户名">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">密码</label>
+                            <input type="password" id="createPassword" class="form-input" placeholder="密码">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">昵称</label>
+                            <input type="text" id="createNickname" class="form-input" placeholder="昵称">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">邮箱</label>
+                            <input type="email" id="createEmail" class="form-input" placeholder="邮箱">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="createUser()">创建用户</button>
+                    </div>
+                    <div id="createUserResponse" class="response-box" style="display: none;"></div>
+                </div>
+
+                <!-- Role Section -->
+                <div id="section-role" class="section" style="display: none;">
+                    <h2 class="section-title">🎭 角色管理</h2>
+                    <p class="section-description">角色列表查询和管理</p>
+
+                    <!-- Role List -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">角色列表</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">当前页</label>
+                            <input type="number" id="rolePage" class="form-input" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">每页数量</label>
+                            <input type="number" id="roleSize" class="form-input" value="10" min="1">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="getRoleList()">查询角色</button>
+                    </div>
+                    <div id="roleListResponse" class="response-box" style="display: none;"></div>
+                </div>
+
+                <!-- Template Section -->
+                <div id="section-template" class="section" style="display: none;">
+                    <h2 class="section-title">📋 模板管理</h2>
+                    <p class="section-description">文档模板查询和配置</p>
+
+                    <!-- Template List -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">模板列表</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">当前页</label>
+                            <input type="number" id="templatePage" class="form-input" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">每页数量</label>
+                            <input type="number" id="templateSize" class="form-input" value="10" min="1">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="getTemplateList()">查询模板</button>
+                    </div>
+                    <div id="templateListResponse" class="response-box" style="display: none;"></div>
+                </div>
+
+                <!-- Dashboard Section -->
+                <div id="section-dashboard" class="section" style="display: none;">
+                    <h2 class="section-title">📊 数据面板</h2>
+                    <p class="section-description">系统统计数据和分析</p>
+
+                    <!-- Dashboard Stats -->
+                    <h3 style="font-size: 18px; margin-bottom: 16px;">统计数据</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="getDashboardStats()">获取统计</button>
+                    </div>
+                    <div id="dashboardResponse" class="response-box" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Global variables
+        let currentSection = 'config';
+        let errorLog = [];
+
+        // Error logging function
+        function logError(apiName, method, url, error, requestData = null) {
+            const errorEntry = {
+                timestamp: new Date().toISOString(),
+                apiName: apiName,
+                method: method,
+                url: url,
+                error: error.message || error.toString(),
+                stack: error.stack || '',
+                requestData: requestData,
+                userAgent: navigator.userAgent
+            };
+
+            errorLog.push(errorEntry);
+
+            // Save to localStorage
+            try {
+                localStorage.setItem('dcs_error_log', JSON.stringify(errorLog));
+            } catch (e) {
+                console.error('Failed to save error log:', e);
+            }
+
+            // Also log to console for debugging
+            console.error('API Error:', errorEntry);
+        }
+
+        // Download error log as text file
+        function downloadErrorLog() {
+            if (errorLog.length === 0) {
+                showToast('暂无错误记录', 'info');
+                return;
+            }
+
+            let logContent = '=== DCS API 错误日志 ===\n';
+            logContent += `生成时间: ${new Date().toLocaleString('zh-CN')}\n`;
+            logContent += `总错误数: ${errorLog.length}\n`;
+            logContent += '='.repeat(80) + '\n\n';
+
+            errorLog.forEach((entry, index) => {
+                logContent += `[${index + 1}] ${entry.timestamp}\n`;
+                logContent += `API: ${entry.apiName}\n`;
+                logContent += `方法: ${entry.method}\n`;
+                logContent += `URL: ${entry.url}\n`;
+                logContent += `错误: ${entry.error}\n`;
+                if (entry.requestData) {
+                    logContent += `请求数据: ${JSON.stringify(entry.requestData, null, 2)}\n`;
+                }
+                if (entry.stack) {
+                    logContent += `堆栈: ${entry.stack}\n`;
+                }
+                logContent += `浏览器: ${entry.userAgent}\n`;
+                logContent += '-'.repeat(80) + '\n\n';
+            });
+
+            // Create blob and download
+            const blob = new Blob([logContent], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `api-error-${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast('错误日志已下载', 'success');
+        }
+
+        // Clear error log
+        function clearErrorLog() {
+            if (confirm('确定要清空所有错误记录吗？')) {
+                errorLog = [];
+                localStorage.removeItem('dcs_error_log');
+                showToast('错误日志已清空', 'success');
+            }
+        }
+
+        // View error log
+        function viewErrorLog() {
+            if (errorLog.length === 0) {
+                alert('暂无错误记录');
+                return;
+            }
+
+            let logHtml = '<div style="max-height: 500px; overflow-y: auto;">';
+            logHtml += `<h3>错误日志 (共 ${errorLog.length} 条)</h3>`;
+
+            errorLog.slice().reverse().forEach((entry, index) => {
+                logHtml += `
+                    <div style="margin: 10px 0; padding: 10px; background: #f5f5f5; border-left: 3px solid #eb5757;">
+                        <strong>[${errorLog.length - index}] ${new Date(entry.timestamp).toLocaleString('zh-CN')}</strong><br>
+                        <strong>API:</strong> ${entry.apiName}<br>
+                        <strong>方法:</strong> ${entry.method} ${entry.url}<br>
+                        <strong>错误:</strong> ${entry.error}<br>
+                    </div>
+                `;
+            });
+
+            logHtml += '</div>';
+
+            const win = window.open('', 'Error Log', 'width=800,height=600');
+            win.document.write(`
+                <html>
+                    <head>
+                        <title>API 错误日志</title>
+                        <style>
+                            body { font-family: sans-serif; padding: 20px; }
+                            h3 { color: #eb5757; }
+                        </style>
+                    </head>
+                    <body>${logHtml}</body>
+                </html>
+            `);
+        }
+
+        // Load error log from localStorage on page load
+        window.addEventListener('load', () => {
+            try {
+                const savedLog = localStorage.getItem('dcs_error_log');
+                if (savedLog) {
+                    errorLog = JSON.parse(savedLog);
+                    updateErrorCount();
+                }
+            } catch (e) {
+                console.error('Failed to load error log:', e);
+            }
+
+            // Load saved token
+            const savedToken = localStorage.getItem('dcs_token');
+            if (savedToken) {
+                document.getElementById('globalToken').value = savedToken;
+            }
+        });
+
+        // Show section
+        function showSection(section) {
+            // Hide all sections
+            document.querySelectorAll('[id^="section-"]').forEach(el => {
+                el.style.display = 'none';
+            });
+
+            // Show selected section
+            document.getElementById(`section-${section}`).style.display = 'block';
+
+            // Update sidebar
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.sidebar-item').classList.add('active');
+
+            currentSection = section;
+        }
+
+        // Get headers with token
+        function getHeaders(includeAuth = true) {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (includeAuth) {
+                const token = document.getElementById('globalToken').value;
+                if (token) {
+                    headers['Authorization'] = token;
+                }
+            }
+            return headers;
+        }
+
+        // Get base URL
+        function getBaseUrl() {
+            return document.getElementById('baseUrl').value;
+        }
+
+        // Show toast
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Display response
+        function displayResponse(elementId, data) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.textContent = JSON.stringify(data, null, 2);
+        }
+
+        // Update error count badge
+        function updateErrorCount() {
+            const badge = document.getElementById('errorCount');
+            if (errorLog.length > 0) {
+                badge.textContent = errorLog.length;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        // Unified error handler
+        function handleApiError(apiName, method, url, error, requestData = null) {
+            logError(apiName, method, url, error, requestData);
+            updateErrorCount();
+            showToast(`请求失败: ${error.message}`, 'error');
+        }
+
+        // Generic API call wrapper with automatic error logging
+        async function callAPI(apiName, method, url, options = {}) {
+            try {
+                const response = await fetch(url, options);
+                const data = await response.json();
+                return { success: true, data };
+            } catch (error) {
+                handleApiError(apiName, method, url, error, options.body ? JSON.parse(options.body) : null);
+                return { success: false, error };
+            }
+        }
+
+        // ============ Auth Functions ============
+
+        async function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const url = `${getBaseUrl()}/api/auth/login`;
+            const requestData = { username, password };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+                displayResponse('loginResponse', data);
+
+                if (data.code === 200) {
+                    const token = `Bearer ${data.data.token}`;
+                    document.getElementById('globalToken').value = token;
+                    document.getElementById('currentUser').textContent = data.data.username;
+                    showToast('登录成功', 'success');
+                } else {
+                    showToast('登录失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('用户登录', 'POST', url, error, requestData);
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('registerUsername').value;
+            const password = document.getElementById('registerPassword').value;
+            const nickname = document.getElementById('registerNickname').value;
+            const email = document.getElementById('registerEmail').value;
+            const url = `${getBaseUrl()}/api/auth/register`;
+            const requestData = { username, password, nickname, email };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+                displayResponse('registerResponse', data);
+
+                if (data.code === 200) {
+                    showToast('注册成功', 'success');
+                } else {
+                    showToast('注册失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('用户注册', 'POST', url, error, requestData);
+            }
+        }
+
+        async function getCurrentUser() {
+            const url = `${getBaseUrl()}/api/auth/me`;
+            try {
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                displayResponse('userInfoResponse', data);
+
+                if (data.code === 200) {
+                    showToast('获取成功', 'success');
+                } else {
+                    showToast('获取失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('获取当前用户', 'GET', url, error);
+            }
+        }
+
+        async function logout() {
+            const url = `${getBaseUrl()}/api/auth/logout`;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                if (data.code === 200) {
+                    document.getElementById('globalToken').value = '';
+                    document.getElementById('currentUser').textContent = '未登录';
+                    showToast('已登出', 'success');
+                }
+            } catch (error) {
+                handleApiError('用户登出', 'POST', url, error);
+            }
+        }
+
+        // ============ File Functions ============
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showToast('请选择文件', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            const url = `${getBaseUrl()}/api/file/upload`;
+
+            try {
+                const token = document.getElementById('globalToken').value;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': token
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                displayResponse('uploadResponse', data);
+
+                if (data.code === 200) {
+                    showToast('上传成功', 'success');
+                } else {
+                    showToast('上传失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('文件上传', 'POST', url, error, { fileName: file.name, fileSize: file.size });
+            }
+        }
+
+        async function getFileList() {
+            const page = document.getElementById('filePage').value;
+            const size = document.getElementById('fileSize').value;
+            const status = document.getElementById('fileStatus').value;
+            const fileName = document.getElementById('fileName').value;
+
+            let url = `${getBaseUrl()}/api/file/page?current=${page}&size=${size}`;
+            if (status) url += `&processStatus=${status}`;
+            if (fileName) url += `&fileName=${fileName}`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                displayResponse('fileListResponse', data);
+
+                if (data.code === 200) {
+                    showToast('查询成功', 'success');
+                } else {
+                    showToast('查询失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('文件列表查询', 'GET', url, error);
+            }
+        }
+
+        async function getFileDetail() {
+            const fileId = document.getElementById('fileDetailId').value;
+
+            if (!fileId) {
+                showToast('请输入文件 ID', 'error');
+                return;
+            }
+
+            const url = `${getBaseUrl()}/api/file/${fileId}`;
+            try {
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                displayResponse('fileDetailResponse', data);
+
+                if (data.code === 200) {
+                    showToast('获取成功', 'success');
+                } else {
+                    showToast('获取失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('文件详情查询', 'GET', url, error, { fileId });
+            }
+        }
+
+        // ============ AI Functions ============
+
+        async function processAI() {
+            const fileId = document.getElementById('aiFileId').value;
+            const fileContent = document.getElementById('aiFileContent').value;
+            const fileName = document.getElementById('aiFileName').value;
+
+            if (!fileId && !fileContent) {
+                showToast('请输入文件 ID 或文件内容', 'error');
+                return;
+            }
+
+            const options = {
+                use_llm: document.getElementById('aiUseLlm').checked,
+                llm_image: document.getElementById('aiLlmImage').checked,
+                enhance_image: document.getElementById('aiEnhanceImage').checked,
+                detect_table: document.getElementById('aiDetectTable').checked,
+                llm_provider: document.getElementById('aiLlmProvider').value,
+                llm_model: document.getElementById('aiLlmModel').value
+            };
+
+            const requestBody = {
+                options: options,
+                template_config: {}
+            };
+
+            if (fileId) {
+                requestBody.fileId = fileId;
+            }
+            if (fileContent) {
+                requestBody.file_content = fileContent;
+                requestBody.file_name = fileName || 'upload.pdf';
+            }
+
+            try {
+                const btn = document.getElementById('aiProcessBtn');
+                btn.innerHTML = '<span class="loading"></span> 处理中...';
+
+                const response = await fetch(`${getBaseUrl()}/api/v1/ai/process`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(requestBody)
+                });
+
+                const data = await response.json();
+                displayResponse('aiResponse', data);
+
+                btn.textContent = '开始 AI 处理';
+
+                if (data.code === 200) {
+                    showToast('处理成功', 'success');
+                } else {
+                    showToast('处理失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                document.getElementById('aiProcessBtn').textContent = '开始 AI 处理';
+                handleApiError('AI处理', 'POST', `${getBaseUrl()}/api/v1/ai/process`, error, requestBody);
+            }
+        }
+
+        // ============ Audit Functions ============
+
+        async function getFilePreview() {
+            const fileId = document.getElementById('auditFileId').value;
+
+            if (!fileId) {
+                showToast('请输入文件 ID', 'error');
+                return;
+            }
+
+            const url = `${getBaseUrl()}/api/audit/preview/${fileId}`;
+            try {
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                displayResponse('previewResponse', data);
+
+                if (data.code === 200) {
+                    document.getElementById('previewFrame').src = data.data;
+                    document.getElementById('previewFrame').style.display = 'block';
+                    showToast('获取成功', 'success');
+                } else {
+                    showToast('获取失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('文件预览', 'GET', url, error, { fileId });
+            }
+        }
+
+        async function getAIResult() {
+            const fileId = document.getElementById('auditFileId').value;
+
+            if (!fileId) {
+                showToast('请输入文件 ID', 'error');
+                return;
+            }
+
+            const url = `${getBaseUrl()}/api/audit/result/${fileId}`;
+            try {
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                displayResponse('aiResultResponse', data);
+
+                if (data.code === 200) {
+                    showToast('获取成功', 'success');
+                } else {
+                    showToast('获取失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('获取AI结果', 'GET', url, error, { fileId });
+            }
+        }
+
+        async function modifyFields() {
+            const fileId = document.getElementById('auditFileId').value;
+            const fieldsStr = document.getElementById('modifyFields').value;
+
+            if (!fileId) {
+                showToast('请输入文件 ID', 'error');
+                return;
+            }
+
+            if (!fieldsStr) {
+                showToast('请输入字段数据', 'error');
+                return;
+            }
+
+            const url = `${getBaseUrl()}/api/audit/modify/${fileId}`;
+            try {
+                const fields = JSON.parse(fieldsStr);
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(fields)
+                });
+
+                const data = await response.json();
+                displayResponse('modifyResponse', data);
+
+                if (data.code === 200) {
+                    showToast('修改成功', 'success');
+                } else {
+                    showToast('修改失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('修改字段', 'POST', url, error, { fileId, fieldsStr });
+            }
+        }
+
+        async function submitAudit() {
+            const fileId = document.getElementById('auditFileId').value;
+            const status = parseInt(document.getElementById('auditStatus').value);
+            const comment = document.getElementById('auditComment').value;
+
+            if (!fileId) {
+                showToast('请输入文件 ID', 'error');
+                return;
+            }
+
+            const url = `${getBaseUrl()}/api/audit/submit`;
+            const requestData = { fileId, auditStatus: status, auditComment: comment };
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+                displayResponse('auditSubmitResponse', data);
+
+                if (data.code === 200) {
+                    showToast('提交成功', 'success');
+                } else {
+                    showToast('提交失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('提交审核', 'POST', url, error, requestData);
+            }
+        }
+
+        async function getAuditHistory() {
+            const fileId = document.getElementById('auditFileId').value;
+
+            if (!fileId) {
+                showToast('请输入文件 ID', 'error');
+                return;
+            }
+
+            const url = `${getBaseUrl()}/api/audit/history/${fileId}`;
+            try {
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                displayResponse('auditHistoryResponse', data);
+
+                if (data.code === 200) {
+                    showToast('获取成功', 'success');
+                } else {
+                    showToast('获取失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('审核历史', 'GET', url, error, { fileId });
+            }
+        }
+
+        // ============ User Functions ============
+
+        async function getUserList() {
+            const page = document.getElementById('userPage').value;
+            const size = document.getElementById('userSize').value;
+            const url = `${getBaseUrl()}/api/users/page?current=${page}&size=${size}`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                displayResponse('userListResponse', data);
+
+                if (data.code === 200) {
+                    showToast('查询成功', 'success');
+                } else {
+                    showToast('查询失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('用户列表查询', 'GET', url, error);
+            }
+        }
+
+        async function createUser() {
+            const username = document.getElementById('createUsername').value;
+            const password = document.getElementById('createPassword').value;
+            const nickname = document.getElementById('createNickname').value;
+            const email = document.getElementById('createEmail').value;
+            const url = `${getBaseUrl()}/api/users`;
+            const requestData = { username, password, nickname, email };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+                displayResponse('createUserResponse', data);
+
+                if (data.code === 200) {
+                    showToast('创建成功', 'success');
+                } else {
+                    showToast('创建失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('创建用户', 'POST', url, error, requestData);
+            }
+        }
+
+        // ============ Role Functions ============
+
+        async function getRoleList() {
+            const page = document.getElementById('rolePage').value;
+            const size = document.getElementById('roleSize').value;
+            const url = `${getBaseUrl()}/api/roles/page?current=${page}&size=${size}`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                displayResponse('roleListResponse', data);
+
+                if (data.code === 200) {
+                    showToast('查询成功', 'success');
+                } else {
+                    showToast('查询失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('角色列表查询', 'GET', url, error);
+            }
+        }
+
+        // ============ Template Functions ============
+
+        async function getTemplateList() {
+            const page = document.getElementById('templatePage').value;
+            const size = document.getElementById('templateSize').value;
+            const url = `${getBaseUrl()}/api/template/page?current=${page}&size=${size}`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                displayResponse('templateListResponse', data);
+
+                if (data.code === 200) {
+                    showToast('查询成功', 'success');
+                } else {
+                    showToast('查询失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('模板列表查询', 'GET', url, error);
+            }
+        }
+
+        // ============ Dashboard Functions ============
+
+        async function getDashboardStats() {
+            const url = `${getBaseUrl()}/api/dashboard/stats`;
+            try {
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+                displayResponse('dashboardResponse', data);
+
+                if (data.code === 200) {
+                    showToast('获取成功', 'success');
+                } else {
+                    showToast('获取失败: ' + data.message, 'error');
+                }
+            } catch (error) {
+                handleApiError('数据面板统计', 'GET', url, error);
+            }
+        }
+
+        // ============ File Upload Zone ============
+
+        const uploadZone = document.getElementById('fileUploadZone');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                uploadFile();
+            }
+        });
+
+        // Auto-save token to localStorage
+        document.getElementById('globalToken').addEventListener('input', (e) => {
+            localStorage.setItem('dcs_token', e.target.value);
+        });
+
+        // Load token from localStorage
+        window.addEventListener('load', () => {
+            const savedToken = localStorage.getItem('dcs_token');
+            if (savedToken) {
+                document.getElementById('globalToken').value = savedToken;
+            }
+        });
+
+        // Global error handler for uncaught errors
+        window.addEventListener('error', (event) => {
+            logError('全局错误', 'UNCAUGHT', window.location.href, event.error || new Error(event.message));
+            updateErrorCount();
+        });
+
+        // Global promise rejection handler
+        window.addEventListener('unhandledrejection', (event) => {
+            logError('未处理的Promise拒绝', 'PROMISE', window.location.href, event.reason || new Error('Promise rejected'));
+            updateErrorCount();
+        });
+
+        // Auto-export error log when errors exceed threshold
+        setInterval(() => {
+            if (errorLog.length >= 50) {
+                console.warn(`错误日志已达 ${errorLog.length} 条，建议导出查看`);
+            }
+        }, 60000); // Check every minute
+    </script>
+</body>
+</html>
+
