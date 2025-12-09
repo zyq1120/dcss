@@ -98,6 +98,22 @@ public class AuthController {
     }
 
     /**
+     * 获取当前用户信息（简化版本）
+     * <p>
+     * 前端常用接口，直接返回当前登录用户的信息
+     * </p>
+     *
+     * @return 用户信息
+     */
+    @GetMapping("/me")
+    public R<UserInfoVO> getCurrentUserInfo() {
+        Long currentUserId = getCurrentUserId();
+        log.info("获取当前用户信息: userId={}", currentUserId);
+        UserInfoVO vo = authService.getCurrentUserInfo(currentUserId);
+        return R.ok(vo);
+    }
+
+    /**
      * 获取用户信息
      * <p>
      * 说明：

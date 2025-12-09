@@ -78,6 +78,66 @@ public class DocumentExtractMain implements Serializable {
     private Integer status;
 
     /**
+     * 文档类型（如：transcript, certificate, leave_application等）
+     */
+    @TableField("document_type")
+    private String documentType;
+
+    /**
+     * 文档访问URL（MinIO预签名URL）
+     */
+    @TableField("document_url")
+    private String documentUrl;
+
+    /**
+     * OCR识别的原始文本内容
+     */
+    @TableField("raw_text")
+    private String rawText;
+
+    /**
+     * 基本信息JSON（姓名、学号、学校等）
+     */
+    @TableField("basic_info_json")
+    private String basicInfoJson;
+
+    /**
+     * 学业信息JSON（学位、入学日期等）
+     */
+    @TableField("academic_info_json")
+    private String academicInfoJson;
+
+    /**
+     * 证书信息JSON（证书编号、颁发日期等）
+     */
+    @TableField("certificate_info_json")
+    private String certificateInfoJson;
+
+    /**
+     * 财务信息JSON（银行账户、贷款金额等）
+     */
+    @TableField("financial_info_json")
+    private String financialInfoJson;
+
+    /**
+     * 请假信息JSON（请假原因、天数等）
+     */
+    @TableField("leave_info_json")
+    private String leaveInfoJson;
+
+    /**
+     * 摘要信息
+     */
+    @TableField("summary")
+    private String summary;
+
+    /**
+     * 表格数据JSON（课程成绩等表格）
+     */
+    @TableField("tables_json")
+    private String tablesJson;
+
+    /**
      * 创建时间
      */
     @TableField("create_time")

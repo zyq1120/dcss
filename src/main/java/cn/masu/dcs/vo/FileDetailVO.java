@@ -1,5 +1,7 @@
 package cn.masu.dcs.vo;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.Data;
 import java.util.Date;
 
@@ -9,14 +11,22 @@ import java.util.Date;
  */
 @Data
 public class FileDetailVO {
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
+
     private String fileName;
     private String filePath;
     private String fileType;
     private Long fileSize;
+
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long uploadUserId;
+
     private String uploadUserName;
+
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long templateId;
+
     private String templateName;
     private Integer status;
     private String statusName;

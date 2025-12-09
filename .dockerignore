@@ -1,0 +1,68 @@
+# ========================================
+# Docker构建忽略文件
+# 减少构建上下文大小，加速构建
+# ========================================
+
+# Git相关
+.git
+.gitignore
+.gitattributes
+
+# IDE相关
+.idea
+*.iml
+.vscode
+.settings
+.project
+.classpath
+
+# 构建产物
+target/
+!target/*.jar
+*.class
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*~
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# Maven相关
+.mvn/wrapper/maven-wrapper.jar
+
+# Docker相关
+docker-compose*.yaml
+docker-compose*.yml
+!docker-compose.yml
+
+# 文档
+*.md
+!README.md
+docs/
+
+# 测试文件
+src/test/
+
+# 数据文件
+data/
+*.sql
+!src/main/resources/static/dcs.sql
+!src/main/resources/db/optimization/add_indexes.sql
+
+# Node.js相关（如果有前端）
+node_modules/
+package-lock.json
+yarn.lock
+
+# 其他
+.env
+.env.local
+

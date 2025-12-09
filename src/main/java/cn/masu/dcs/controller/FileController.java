@@ -34,7 +34,21 @@ public class FileController {
     public R<Long> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(required = false) Long templateId,
-            @RequestParam Long userId) {
+            @RequestParam(required = false) Long userId) {
+
+        // 如果未提供userId，尝试从SecurityContext获取
+        if (userId == null) {
+            try {
+                Object principal = org.springframework.security.core.context.SecurityContextHolder
+                    .getContext().getAuthentication().getPrincipal();
+                if (principal instanceof Long) {
+                    userId = (Long) principal;
+                }
+            } catch (Exception e) {
+                // 忽略异常，使用默认用户
+            }
+        }
+
         Long id = fileService.uploadFile(file, templateId, userId);
         return R.ok("上传成功", id);
     }

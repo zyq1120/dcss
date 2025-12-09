@@ -13,10 +13,13 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * 用户管理控制器
+ * <p>
+ * 同时支持 /api/user 和 /api/users 路径，保证向后兼容
+ * </p>
  * @author System
  */
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping({"/api/user", "/api/users"})
 @RequiredArgsConstructor
 public class UserController {
 
@@ -78,6 +81,14 @@ public class UserController {
     public R<Boolean> assignRoles(@Validated @RequestBody UserAssignRoleDTO dto) {
         Boolean result = userService.assignRoles(dto);
         return R.ok("角色分配成功", result);
+    }
+
+    /**
+     * 分配角色（别名接口，兼容前端）
+     */
+    @PostMapping("/assign-role")
+    public R<Boolean> assignRole(@Validated @RequestBody UserAssignRoleDTO dto) {
+        return assignRoles(dto);
     }
 
     /**

@@ -85,25 +85,45 @@ public class AiProcessController {
             return R.fail(400, "请求参数错误：请求体不能为空");
         }
 
+        Long requestFileId = request.getFileId();
         String fileContent = request.getFileContent();
         String text = request.getText();
 
-        // 参数校验：至少要有文件内容或文本内容之一
-        boolean noFileContent = (fileContent == null || fileContent.trim().isEmpty());
-        boolean noText = (text == null || text.trim().isEmpty());
-        if (noFileContent && noText) {
-            log.warn("请求参数无效：缺少文件内容或文本");
-            return R.fail(400, "请求参数错误：必须提供文件内容(fileContent)或文本内容(text)");
+        // 参数校验：至少要有文件ID、文件内容或文本内容之一
+        boolean hasFileId = (requestFileId != null && requestFileId > 0);
+        boolean hasFileContent = (fileContent != null && !fileContent.trim().isEmpty());
+        boolean hasText = (text != null && !text.trim().isEmpty());
+
+        if (!hasFileId && !hasFileContent && !hasText) {
+            log.warn("请求参数无效：缺少文件ID、文件内容或文本");
+            return R.fail(400, "请求参数错误：必须提供文件ID(fileId)、文件内容(fileContent)或文本内容(text)");
         }
 
-        Long fileId = null;
+        Long fileId = requestFileId;  // 使用请求中的fileId
         String bucketName = null;
         String objectName = null;
         String fileUrl = null;
 
         try {
-            // ===================== 1. 如果有文件内容，先保存 MinIO + 数据库 =====================
-            if (!noFileContent) {
+            // ===================== 1. 处理文件 =====================
+            if (hasFileId) {
+                // 1.1 使用已上传的文件ID
+                log.info("使用已上传的文件ID: {}", fileId);
+                DocumentFile existingFile = fileMapper.selectById(fileId);
+                if (existingFile == null) {
+                    log.error("文件不存在: fileId={}", fileId);
+                    return R.fail(404, "文件不存在：fileId=" + fileId);
+                }
+
+                bucketName = existingFile.getMinioBucket();
+                objectName = existingFile.getMinioObject();
+                fileUrl = buildMinioUrl(bucketName, objectName);
+
+                log.info("文件信息: fileName={}, bucket={}, object={}",
+                    existingFile.getFileName(), bucketName, objectName);
+
+            } else if (hasFileContent) {
+                // 1.2 保存新的文件内容到MinIO + 数据库
                 try {
                     log.info("检测到文件内容，开始保存到 MinIO 和数据库");
                     fileId = saveFileToMinioAndDatabase(request);
@@ -123,10 +143,10 @@ public class AiProcessController {
                     log.info("文件存储信息: bucket={}, object={}", bucketName, objectName);
                 } catch (Exception e) {
                     log.error("文件保存失败", e);
-                    // 不把内部异常细节暴露给前端
                     return R.fail(500, "文件保存失败，请稍后重试或联系管理员");
                 }
             }
+            // 如果只有text，fileId保持为null
 
             // ===================== 2. 构建 Python AI 请求体（包含文件元信息） =====================
             Map<String, Object> pythonRequest = buildPythonRequest(request, fileId, bucketName, objectName, fileUrl);
@@ -154,7 +174,7 @@ public class AiProcessController {
             // ===================== 4. 如果有文件ID，保存 AI 结果到数据库 =====================
             if (fileId != null) {
                 try {
-                    saveAiResultToDatabase(fileId, aiResult);
+                    saveAiResultToDatabase(fileId, aiResult, fileUrl);
                     log.info("AI处理结果已保存到数据库: fileId={}", fileId);
                 } catch (Exception e) {
                     // 这里失败不影响返回，只记日志
@@ -479,26 +499,51 @@ public class AiProcessController {
 
     /**
      * 保存AI处理结果到数据库
+     * <p>
+     * 完整解析Python返回的所有数据：
+     * - document_type: 文档类型
+     * - confidence_overall: 整体置信度
+     * - basic_info: 基本信息（姓名、学号、学校等）
+     * - academic_info: 学业信息
+     * - certificate_info: 证书信息
+     * - financial_info: 财务信息
+     * - leave_info: 请假信息
+     * - courses: 课程成绩列表
+     * - summary: 摘要
+     * - text: 原始OCR文本
+     * - tables: 表格数据
+     * - fields: 其他字段
+     * </p>
      *
      * @param fileId   文件ID
      * @param aiResult AI处理结果
+     * @param fileUrl  文件访问URL（可选）
      */
-    private void saveAiResultToDatabase(Long fileId, JsonNode aiResult) {
+    private void saveAiResultToDatabase(Long fileId, JsonNode aiResult, String fileUrl) {
         try {
             log.info("开始保存AI结果到数据库: fileId={}", fileId);
 
-            // 提取文档类型和置信度
-            String documentType = aiResult.has("document_type") ?
-                    aiResult.get("document_type").asText() : null;
-            Double confidence = aiResult.has("confidence_overall") ?
-                    aiResult.get("confidence_overall").asDouble() : null;
+            // ============ 1. 提取基础信息 ============
+            String documentType = getStringFromJson(aiResult, "document_type");
+            Double confidence = getDoubleFromJson(aiResult, "confidence_overall");
+            String rawText = getStringFromJson(aiResult, "text");
+            String summary = getStringFromJson(aiResult, "summary");
+
+            log.info("📋 文档类型: {}, 置信度: {}", documentType, confidence);
 
             // 创建提取主表记录
             DocumentExtractMain extractMain = new DocumentExtractMain();
             extractMain.setId(idGenerator.nextId());
             extractMain.setFileId(fileId);
 
-            // ============ 1. 保存完整的AI结果JSON（所有数据） ============
+            // ============ 2. 保存文档类型和URL ============
+            extractMain.setDocumentType(documentType);
+            extractMain.setDocumentUrl(fileUrl);
+            extractMain.setRawText(rawText);
+            extractMain.setSummary(summary);
+            extractMain.setConfidence(confidence);
+
+            // ============ 3. 保存完整的AI结果JSON（所有数据） ============
             try {
                 String fullResultJson = objectMapper.writeValueAsString(aiResult);
                 extractMain.setExtractResult(fullResultJson);
@@ -507,29 +552,93 @@ public class AiProcessController {
                 log.error("❌ 序列化完整AI结果失败", e);
             }
 
-            // ============ 2. 提取并保存KV键值对数据 ============
+            // ============ 4. 保存基本信息（basic_info）============
+            if (aiResult.has("basic_info") && aiResult.get("basic_info").isObject()) {
+                JsonNode basicInfo = aiResult.get("basic_info");
+                try {
+                    String basicInfoJson = objectMapper.writeValueAsString(basicInfo);
+                    extractMain.setBasicInfoJson(basicInfoJson);
+
+                    // 提取关键字段到主表
+                    String name = getStringFromJson(basicInfo, "name");
+                    String studentId = getStringFromJson(basicInfo, "student_id");
+                    String idNumber = getStringFromJson(basicInfo, "id_number");
+
+                    if (name != null && !name.isEmpty()) {
+                        extractMain.setOwnerName(name);
+                    }
+                    if (studentId != null && !studentId.isEmpty()) {
+                        extractMain.setOwnerId(studentId);
+                    } else if (idNumber != null && !idNumber.isEmpty()) {
+                        extractMain.setOwnerId(idNumber);
+                    }
+
+                    log.info("✅ 保存基本信息: name={}, studentId={}", name, studentId);
+                } catch (Exception e) {
+                    log.error("❌ 序列化基本信息失败", e);
+                }
+            }
+
+            // ============ 5. 保存学业信息（academic_info）============
+            if (aiResult.has("academic_info") && aiResult.get("academic_info").isObject()) {
+                try {
+                    String academicInfoJson = objectMapper.writeValueAsString(aiResult.get("academic_info"));
+                    extractMain.setAcademicInfoJson(academicInfoJson);
+                    log.info("✅ 保存学业信息");
+                } catch (Exception e) {
+                    log.error("❌ 序列化学业信息失败", e);
+                }
+            }
+
+            // ============ 6. 保存证书信息（certificate_info）============
+            if (aiResult.has("certificate_info") && aiResult.get("certificate_info").isObject()) {
+                try {
+                    String certificateInfoJson = objectMapper.writeValueAsString(aiResult.get("certificate_info"));
+                    extractMain.setCertificateInfoJson(certificateInfoJson);
+                    log.info("✅ 保存证书信息");
+                } catch (Exception e) {
+                    log.error("❌ 序列化证书信息失败", e);
+                }
+            }
+
+            // ============ 7. 保存财务信息（financial_info）============
+            if (aiResult.has("financial_info") && aiResult.get("financial_info").isObject()) {
+                try {
+                    String financialInfoJson = objectMapper.writeValueAsString(aiResult.get("financial_info"));
+                    extractMain.setFinancialInfoJson(financialInfoJson);
+                    log.info("✅ 保存财务信息");
+                } catch (Exception e) {
+                    log.error("❌ 序列化财务信息失败", e);
+                }
+            }
+
+            // ============ 8. 保存请假信息（leave_info）============
+            if (aiResult.has("leave_info") && aiResult.get("leave_info").isObject()) {
+                try {
+                    String leaveInfoJson = objectMapper.writeValueAsString(aiResult.get("leave_info"));
+                    extractMain.setLeaveInfoJson(leaveInfoJson);
+                    log.info("✅ 保存请假信息");
+                } catch (Exception e) {
+                    log.error("❌ 序列化请假信息失败", e);
+                }
+            }
+
+            // ============ 9. 保存表格数据（tables）============
+            if (aiResult.has("tables") && aiResult.get("tables").isArray()) {
+                try {
+                    String tablesJson = objectMapper.writeValueAsString(aiResult.get("tables"));
+                    extractMain.setTablesJson(tablesJson);
+                    log.info("✅ 保存表格数据");
+                } catch (Exception e) {
+                    log.error("❌ 序列化表格数据失败", e);
+                }
+            }
+
+            // ============ 10. 提取并保存KV键值对数据（fields）============
             Map<String, Object> kvData = new HashMap<>();
 
-            // 优先从 key_value_pairs 提取
-            if (aiResult.has("key_value_pairs")) {
-                JsonNode kvPairs = aiResult.get("key_value_pairs");
-                kvPairs.fields().forEachRemaining(entry -> {
-                    String key = entry.getKey();
-                    JsonNode value = entry.getValue();
-                    if (value.isTextual()) {
-                        kvData.put(key, value.asText());
-                    } else if (value.isNumber()) {
-                        kvData.put(key, value.asDouble());
-                    } else if (value.isBoolean()) {
-                        kvData.put(key, value.asBoolean());
-                    } else {
-                        kvData.put(key, value.toString());
-                    }
-                });
-                log.info("✅ 从 key_value_pairs 提取了 {} 个字段", kvData.size());
-            }
-            // 如果没有key_value_pairs，则从fields提取
-            else if (aiResult.has("fields") && aiResult.get("fields").isObject()) {
+            // 从 fields 提取
+            if (aiResult.has("fields") && aiResult.get("fields").isObject()) {
                 JsonNode fields = aiResult.get("fields");
                 fields.fields().forEachRemaining(entry -> {
                     String key = entry.getKey();
@@ -537,10 +646,10 @@ public class AiProcessController {
                     if (value.isTextual()) {
                         kvData.put(key, value.asText());
                     } else if (value.isNumber()) {
-                        kvData.put(key, value.asDouble());
+                        kvData.put(key, value.numberValue());
                     } else if (value.isBoolean()) {
                         kvData.put(key, value.asBoolean());
-                    } else {
+                    } else if (!value.isNull()) {
                         kvData.put(key, value.toString());
                     }
                 });
@@ -552,53 +661,38 @@ public class AiProcessController {
                 try {
                     String kvDataJson = objectMapper.writeValueAsString(kvData);
                     extractMain.setKvDataJson(kvDataJson);
-                    log.info("✅ 保存 KV 数据JSON，字段数: {}, 样本: {}",
-                        kvData.size(),
-                        kvData.keySet().stream().limit(5).collect(Collectors.joining(", ")));
+                    log.info("✅ 保存 KV 数据JSON，字段数: {}", kvData.size());
                 } catch (Exception e) {
                     log.error("❌ 序列化KV数据失败", e);
                 }
-            } else {
-                log.warn("⚠️ 没有提取到任何KV数据");
             }
 
-            // ============ 3. 提取特定字段到主表列 ============
-            // 提取所有者姓名
-            if (kvData.containsKey("name")) {
-                extractMain.setOwnerName(kvData.get("name").toString());
-            } else if (kvData.containsKey("student_name")) {
-                extractMain.setOwnerName(kvData.get("student_name").toString());
-            } else if (aiResult.has("fields")) {
-                JsonNode fields = aiResult.get("fields");
-                if (fields.has("name")) {
-                    extractMain.setOwnerName(fields.get("name").asText());
-                } else if (fields.has("student_name")) {
-                    extractMain.setOwnerName(fields.get("student_name").asText());
+            // ============ 11. 如果还没有提取到owner信息，从其他位置尝试提取 ============
+            if (extractMain.getOwnerName() == null || extractMain.getOwnerName().isEmpty()) {
+                // 尝试从kvData提取
+                if (kvData.containsKey("name")) {
+                    extractMain.setOwnerName(kvData.get("name").toString());
+                } else if (kvData.containsKey("student_name")) {
+                    extractMain.setOwnerName(kvData.get("student_name").toString());
+                }
+            }
+            if (extractMain.getOwnerId() == null || extractMain.getOwnerId().isEmpty()) {
+                if (kvData.containsKey("student_id")) {
+                    extractMain.setOwnerId(kvData.get("student_id").toString());
+                } else if (kvData.containsKey("id_number")) {
+                    extractMain.setOwnerId(kvData.get("id_number").toString());
                 }
             }
 
-            // 提取所有者ID
-            if (kvData.containsKey("student_id")) {
-                extractMain.setOwnerId(kvData.get("student_id").toString());
-            } else if (kvData.containsKey("id")) {
-                extractMain.setOwnerId(kvData.get("id").toString());
-            } else if (aiResult.has("fields")) {
-                JsonNode fields = aiResult.get("fields");
-                if (fields.has("student_id")) {
-                    extractMain.setOwnerId(fields.get("student_id").asText());
-                } else if (fields.has("id")) {
-                    extractMain.setOwnerId(fields.get("id").asText());
-                }
-            }
-
-            extractMain.setConfidence(confidence);
             extractMain.setStatus(0); // 0=待审核
 
+            // 保存主表记录
             extractMainMapper.insert(extractMain);
-            log.info("✅ 保存提取主表成功: extractId={}, ownerId={}, ownerName={}",
-                extractMain.getId(), extractMain.getOwnerId(), extractMain.getOwnerName());
+            log.info("✅ 保存提取主表成功: extractId={}, docType={}, ownerId={}, ownerName={}",
+                extractMain.getId(), extractMain.getDocumentType(),
+                extractMain.getOwnerId(), extractMain.getOwnerName());
 
-            // ============ 4. 提取详细字段（如课程成绩等） ============
+            // ============ 12. 提取课程详细数据（courses）============
             if (aiResult.has("courses") && aiResult.get("courses").isArray()) {
                 JsonNode courses = aiResult.get("courses");
                 int rowIndex = 0;
@@ -611,12 +705,24 @@ public class AiProcessController {
                     detail.setRowDataJson(course.toString());
                     detail.setIsVerified(0); // 0=未验证
 
+                    // 提取课程名称和成绩作为字段名和字段值
+                    if (course.has("course") || course.has("course_name")) {
+                        String courseName = course.has("course") ?
+                            course.get("course").asText() : course.get("course_name").asText();
+                        detail.setFieldName(courseName);
+                    }
+                    if (course.has("score") || course.has("grade")) {
+                        String score = course.has("score") ?
+                            course.get("score").asText() : course.get("grade").asText();
+                        detail.setFieldValue(score);
+                    }
+
                     extractDetailMapper.insert(detail);
                 }
                 log.info("✅ 保存课程详情成功: {} 条记录", rowIndex);
             }
 
-            // ============ 5. 更新文件状态 ============
+            // ============ 13. 更新文件状态 ============
             DocumentFile file = fileMapper.selectById(fileId);
             if (file != null) {
                 // 根据置信度决定状态
@@ -630,12 +736,43 @@ public class AiProcessController {
                 fileMapper.updateById(file);
             }
 
-            log.info("🎉 AI结果保存完成: fileId={}, extractId={}", fileId, extractMain.getId());
+            log.info("🎉 AI结果保存完成: fileId={}, extractId={}, documentType={}",
+                fileId, extractMain.getId(), documentType);
 
         } catch (Exception e) {
             log.error("❌ 保存AI结果到数据库失败: fileId={}", fileId, e);
             throw new RuntimeException("保存AI结果失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 保存AI处理结果到数据库（兼容旧版本调用）
+     *
+     * @param fileId   文件ID
+     * @param aiResult AI处理结果
+     */
+    private void saveAiResultToDatabase(Long fileId, JsonNode aiResult) {
+        saveAiResultToDatabase(fileId, aiResult, null);
+    }
+
+    /**
+     * 从JsonNode中安全获取字符串值
+     */
+    private String getStringFromJson(JsonNode node, String field) {
+        if (node == null || !node.has(field) || node.get(field).isNull()) {
+            return null;
+        }
+        return node.get(field).asText();
+    }
+
+    /**
+     * 从JsonNode中安全获取Double值
+     */
+    private Double getDoubleFromJson(JsonNode node, String field) {
+        if (node == null || !node.has(field) || node.get(field).isNull()) {
+            return null;
+        }
+        return node.get(field).asDouble();
     }
 
     /**
@@ -710,6 +847,11 @@ public class AiProcessController {
      */
     @Data
     public static class AiProcessRequest {
+        /**
+         * 文件ID（已上传的文件）
+         */
+        private Long fileId;
+
         /**
          * Base64编码的文件内容
          */

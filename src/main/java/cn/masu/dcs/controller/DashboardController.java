@@ -43,6 +43,17 @@ public class DashboardController {
     }
 
     /**
+     * 获取统计数据（别名接口，兼容前端）
+     *
+     * @return 概览统计数据
+     */
+    @GetMapping("/stats")
+    public R<DashboardOverviewVO> getStats() {
+        log.info("获取驾驶舱统计数据(stats接口)");
+        return getOverview();
+    }
+
+    /**
      * 获取趋势数据
      * <p>
      * 支持查询最近N天的趋势数据
