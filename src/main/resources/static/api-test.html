@@ -776,6 +776,14 @@
 
                     <!-- Modify Fields -->
                     <h3 style="font-size: 18px; margin-bottom: 16px;">修改字段</h3>
+                    <div class="callout">
+                        <strong>提示：</strong> 只需传入实际需要覆盖的字段（例如 {"studentName":"张三"}），接口会自动同步到 extract_result 与 kv_data_json。
+                    </div>
+                    <div class="btn-group" style="margin-bottom: 12px;">
+                        <button class="btn btn-secondary" onclick="fillAuditSampleFields()">一键填充示例字段</button>
+                        <button class="btn btn-secondary" onclick="getReviewDetail()">拉取最新提取详情</button>
+                        <button class="btn btn-secondary" onclick="populateFieldsFromReview()">从详情填充字段</button>
+                    </div>
                     <div class="form-group">
                         <label class="form-label">字段数据（JSON 格式）</label>
                         <textarea id="modifyFields" class="form-textarea" placeholder='{"studentName": "张三", "studentId": "2021001"}'></textarea>
@@ -784,6 +792,15 @@
                         <button class="btn btn-primary" onclick="modifyFields()">保存修改</button>
                     </div>
                     <div id="modifyResponse" class="response-box" style="display: none;"></div>
+                    <div id="reviewDetailResponse" class="response-box" style="display: none; margin-top: 12px;"></div>
+
+                    <div id="reviewDetailKvPanel" style="display: none; margin-top: 12px; padding: 16px; background: var(--notion-gray-bg); border-radius: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <strong>最新提取结果（kvData）</strong>
+                            <button class="btn btn-secondary" onclick="applyKvDataToFields()">一键填充</button>
+                        </div>
+                        <pre id="reviewDetailKvJson" style="max-height: 240px; overflow-y: auto; font-size: 12px; background: #1e1e1e; color: #e6e6e6; padding: 8px; border-radius: 4px;"></pre>
+                    </div>
 
                     <div class="divider"></div>
 
@@ -1242,7 +1259,7 @@
                     <!-- Dashboard Stats -->
                     <h3 style="font-size: 18px; margin-bottom: 16px;">统计数据</h3>
                     <div class="btn-group">
-                        <button class="btn btn-primary" onclick="getDashboardStats()">获取统计</button>
+                        <button class="btn btn-primary" onclick="getDashboardStats()">获取统计数据</button>
                     </div>
                     <div id="dashboardResponse" class="response-box" style="display: none;"></div>
                 </div>
@@ -1257,6 +1274,7 @@
         // Global variables
         let currentSection = 'config';
         let errorLog = [];
+        let lastReviewDetailData = null;
 
         // Error logging function
         function logError(apiName, method, url, error, requestData = null) {
@@ -1877,6 +1895,7 @@
 
                 if (data.code === 200) {
                     showToast('修改成功', 'success');
+                    await getReviewDetail(false);
                 } else {
                     showToast('修改失败: ' + data.message, 'error');
                 }
@@ -1885,969 +1904,116 @@
             }
         }
 
-        async function submitAudit() {
+        async function getReviewDetail(showToastMsg = true) {
             const fileId = document.getElementById('auditFileId').value;
-            const status = parseInt(document.getElementById('auditStatus').value);
-            const comment = document.getElementById('auditComment').value;
-
             if (!fileId) {
-                showToast('请输入文件 ID', 'error');
+                if (showToastMsg) {
+                    showToast('请输入文件 ID', 'error');
+                }
+                return;
+            }
+            const url = `${getBaseUrl()}/api/review/${fileId}/detail`;
+            try {
+                const response = await fetch(url, { headers: getHeaders() });
+                const data = await response.json();
+                displayResponse('reviewDetailResponse', data);
+                document.getElementById('reviewDetailResponse').style.display = 'block';
+                lastReviewDetailData = data; // 维护最近一次的校对详情数据
+
+                if (data.code === 200 && data.data) {
+                    const kvData = data.data.kvData || data.data.kv_data || null;
+                    if (kvData && Object.keys(kvData).length > 0) {
+                        document.getElementById('reviewDetailKvJson').textContent = JSON.stringify(kvData, null, 2);
+                        document.getElementById('reviewDetailKvPanel').style.display = 'block';
+                    } else {
+                        document.getElementById('reviewDetailKvPanel').style.display = 'none';
+                    }
+                } else {
+                    document.getElementById('reviewDetailKvPanel').style.display = 'none';
+                }
+
+                if (showToastMsg) {
+                    if (data.code === 200) {
+                        showToast('拉取详情成功', 'success');
+                    } else {
+                        showToast('拉取详情失败: ' + data.message, 'error');
+                    }
+                }
+            } catch (error) {
+                document.getElementById('reviewDetailKvPanel').style.display = 'none';
+                handleApiError('校对详情', 'GET', url, error, { fileId });
+            }
+        }
+
+        function fillAuditSampleFields() {
+            const sample = {
+                studentName: '周宇清',
+                studentId: '242040390',
+                schoolName: '大数据与人I智能学院'
+            };
+            document.getElementById('modifyFields').value = JSON.stringify(sample, null, 2);
+        }
+
+        function populateFieldsFromReview() {
+            if (!lastReviewDetailData || lastReviewDetailData.code !== 200) {
+                showToast('请先成功拉取一次校对详情', 'error');
+                return;
+            }
+            const fields = lastReviewDetailData?.data?.fields;
+            if (!Array.isArray(fields) || fields.length === 0) {
+                showToast('当前详情中没有可编辑字段', 'error');
+                return;
+            }
+            const editable = {};
+            fields.forEach(item => {
+                if (item?.fieldName && item.fieldValue !== undefined) {
+                    editable[item.fieldName] = item.fieldValue;
+                }
+            });
+            if (Object.keys(editable).length === 0) {
+                showToast('未找到可填充字段', 'error');
+                return;
+            }
+            document.getElementById('modifyFields').value = JSON.stringify(editable, null, 2);
+            showToast('已从详情填充字段', 'success');
+        }
+
+        function applyKvDataToFields() {
+            const kvDataText = document.getElementById('reviewDetailKvJson').textContent.trim();
+            if (!kvDataText) {
+                showToast('暂无最新提取结果', 'error');
                 return;
             }
 
-            const url = `${getBaseUrl()}/api/audit/submit`;
-            const requestData = { fileId, auditStatus: status, auditComment: comment };
             try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: getHeaders(),
-                    body: JSON.stringify(requestData)
-                });
-
-                const data = await response.json();
-                displayResponse('auditSubmitResponse', data);
-
-                if (data.code === 200) {
-                    showToast('提交成功', 'success');
-                } else {
-                    showToast('提交失败: ' + data.message, 'error');
+                const kvData = JSON.parse(kvDataText);
+                const fields = {};
+                for (const [key, value] of Object.entries(kvData)) {
+                    // 只处理字符串类型的值
+                    if (typeof value === 'string') {
+                        fields[key] = value;
+                    }
                 }
-            } catch (error) {
-                handleApiError('提交审核', 'POST', url, error, requestData);
+                document.getElementById('modifyFields').value = JSON.stringify(fields, null, 2);
+                showToast('已填充最新提取结果', 'success');
+            } catch (e) {
+                showToast('填充失败: ' + e.message, 'error');
             }
         }
-
-        async function getAuditHistory() {
-            const fileId = document.getElementById('auditFileId').value;
-
-            if (!fileId) {
-                showToast('请输入文件 ID', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/audit/history/${fileId}`;
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('auditHistoryResponse', data);
-
-                if (data.code === 200) {
-                    showToast('获取成功', 'success');
-                } else {
-                    showToast('获取失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('审核历史', 'GET', url, error, { fileId });
-            }
-        }
-
-        // ============ User Functions ============
-
-        async function getUserList() {
-            const page = document.getElementById('userPage').value;
-            const size = document.getElementById('userSize').value;
-            const url = `${getBaseUrl()}/api/users/page?current=${page}&size=${size}`;
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('userListResponse', data);
-
-                if (data.code === 200) {
-                    showToast('查询成功', 'success');
-                } else {
-                    showToast('查询失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('用户列表查询', 'GET', url, error);
-            }
-        }
-
-        async function createUser() {
-            const username = document.getElementById('createUsername').value;
-            const password = document.getElementById('createPassword').value;
-            const nickname = document.getElementById('createNickname').value;
-            const email = document.getElementById('createEmail').value;
-            const url = `${getBaseUrl()}/api/users`;
-            const requestData = { username, password, nickname, email };
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: getHeaders(),
-                    body: JSON.stringify(requestData)
-                });
-
-                const data = await response.json();
-                displayResponse('createUserResponse', data);
-
-                if (data.code === 200) {
-                    showToast('创建成功', 'success');
-                } else {
-                    showToast('创建失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('创建用户', 'POST', url, error, requestData);
-            }
-        }
-
-        // ============ Role Functions ============
-
-        async function getRoleList() {
-            const page = document.getElementById('rolePage').value;
-            const size = document.getElementById('roleSize').value;
-            const url = `${getBaseUrl()}/api/roles/page?current=${page}&size=${size}`;
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('roleListResponse', data);
-
-                if (data.code === 200) {
-                    showToast('查询成功', 'success');
-                } else {
-                    showToast('查询失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('角色列表查询', 'GET', url, error);
-            }
-        }
-
-        // ============ Template Functions ============
-
-        async function getTemplateList() {
-            const page = document.getElementById('templatePage').value;
-            const size = document.getElementById('templateSize').value;
-            const url = `${getBaseUrl()}/api/template/page?current=${page}&size=${size}`;
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('templateListResponse', data);
-
-                if (data.code === 200) {
-                    showToast('查询成功', 'success');
-                } else {
-                    showToast('查询失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('模板列表查询', 'GET', url, error);
-            }
-        }
-
-        // ============ Dashboard Functions ============
 
         async function getDashboardStats() {
             const url = `${getBaseUrl()}/api/dashboard/stats`;
             try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
+                const response = await fetch(url, { headers: getHeaders() });
                 const data = await response.json();
                 displayResponse('dashboardResponse', data);
-
                 if (data.code === 200) {
-                    showToast('获取成功', 'success');
+                    showToast('统计数据获取成功', 'success');
                 } else {
-                    showToast('获取失败: ' + data.message, 'error');
+                    showToast('获取统计数据失败: ' + data.message, 'error');
                 }
             } catch (error) {
-                handleApiError('数据面板统计', 'GET', url, error);
-            }
-        }
-
-        // ============ Classification Functions ============
-
-        async function getDocumentTypes() {
-            const url = `${getBaseUrl()}/api/classification/types`;
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('typesResponse', data);
-
-                if (data.code === 200) {
-                    showToast('查询成功', 'success');
-
-                    // 更新下拉列表
-                    const select = document.getElementById('classificationDocType');
-                    select.innerHTML = '<option value="">请选择文档类型</option>';
-                    data.data.forEach(item => {
-                        const option = document.createElement('option');
-                        option.value = item.documentType;
-                        option.textContent = `${item.documentType} (${item.count})`;
-                        select.appendChild(option);
-                    });
-                } else {
-                    showToast('查询失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('文档类型统计', 'GET', url, error);
-            }
-        }
-
-        async function getDocumentsByType() {
-            const documentType = document.getElementById('classificationDocType').value;
-            const keyword = document.getElementById('classificationKeyword').value;
-            const page = document.getElementById('classificationPage').value;
-            const size = document.getElementById('classificationSize').value;
-
-            if (!documentType) {
-                showToast('请选择文档类型', 'error');
-                return;
-            }
-
-            let url = `${getBaseUrl()}/api/classification/list?documentType=${encodeURIComponent(documentType)}&current=${page}&size=${size}`;
-            if (keyword) {
-                url += `&keyword=${encodeURIComponent(keyword)}`;
-            }
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('classificationListResponse', data);
-
-                if (data.code === 200) {
-                    showToast('查询成功', 'success');
-                } else {
-                    showToast('查询失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('文档列表查询', 'GET', url, error);
-            }
-        }
-
-        async function getClassificationDetail() {
-            const fileId = document.getElementById('classificationFileId').value;
-
-            if (!fileId) {
-                showToast('请输入文件ID', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/classification/detail/${fileId}`;
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('classificationDetailResponse', data);
-
-                if (data.code === 200) {
-                    showToast('查询成功', 'success');
-                } else {
-                    showToast('查询失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('文档详情查询', 'GET', url, error);
-            }
-        }
-
-        async function searchDocuments() {
-            const keyword = document.getElementById('searchKeyword').value;
-            const page = document.getElementById('searchPage').value;
-
-            if (!keyword) {
-                showToast('请输入搜索关键词', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/classification/search?keyword=${encodeURIComponent(keyword)}&current=${page}&size=10`;
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('searchResponse', data);
-
-                if (data.code === 200) {
-                    showToast('搜索成功', 'success');
-                } else {
-                    showToast('搜索失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('文档搜索', 'GET', url, error);
-            }
-        }
-
-        // ============ Classification Helper Functions ============
-
-        function clearClassificationFilters() {
-            document.getElementById('classificationDocType').value = '';
-            document.getElementById('classificationKeyword').value = '';
-            document.getElementById('classificationPage').value = '1';
-            document.getElementById('classificationSize').value = '10';
-            document.getElementById('classificationListResponse').style.display = 'none';
-            showToast('筛选条件已清空', 'success');
-        }
-
-        function clearSearchKeyword() {
-            document.getElementById('searchKeyword').value = '';
-            document.getElementById('searchPage').value = '1';
-            document.getElementById('searchResponse').style.display = 'none';
-            showToast('搜索条件已清空', 'success');
-        }
-
-        function copyClassificationFileId() {
-            const fileId = document.getElementById('classificationFileId').value;
-            if (!fileId) {
-                showToast('请先输入文件ID', 'error');
-                return;
-            }
-
-            navigator.clipboard.writeText(fileId).then(() => {
-                showToast('文件ID已复制到剪贴板', 'success');
-            }).catch(() => {
-                showToast('复制失败，请手动复制', 'error');
-            });
-        }
-
-        function exportClassificationList() {
-            const responseBox = document.getElementById('classificationListResponse');
-            if (responseBox.style.display === 'none') {
-                showToast('请先查询文档列表', 'error');
-                return;
-            }
-
-            try {
-                const responseData = JSON.parse(responseBox.textContent);
-                if (responseData.code === 200 && responseData.data && responseData.data.records) {
-                    const records = responseData.data.records;
-
-                    // 转换为CSV格式
-                    let csv = '文件ID,文件名,文档类型,置信度,摘要,姓名,学校,上传时间\n';
-                    records.forEach(record => {
-                        csv += `"${record.fileId || ''}",`;
-                        csv += `"${record.fileName || ''}",`;
-                        csv += `"${record.documentType || ''}",`;
-                        csv += `"${record.confidence || ''}",`;
-                        csv += `"${(record.summary || '').replace(/"/g, '""')}",`;
-                        csv += `"${record.name || ''}",`;
-                        csv += `"${record.schoolName || ''}",`;
-                        csv += `"${record.uploadTime || ''}"\n`;
-                    });
-
-                    // 下载CSV文件
-                    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `文档分类列表_${new Date().toISOString().slice(0, 10)}.csv`;
-                    link.click();
-
-                    showToast('导出成功', 'success');
-                } else {
-                    showToast('没有可导出的数据', 'error');
-                }
-            } catch (error) {
-                console.error('导出失败:', error);
-                showToast('导出失败', 'error');
-            }
-        }
-
-        // ============ File Upload Zone ============
-
-        const uploadZone = document.getElementById('fileUploadZone');
-        const fileInput = document.getElementById('fileInput');
-
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadZone.classList.add('dragover');
-        });
-
-        uploadZone.addEventListener('dragleave', () => {
-            uploadZone.classList.remove('dragover');
-        });
-
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadZone.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                fileInput.files = files;
-                uploadFile();
-            }
-        });
-
-        // Auto-save token to localStorage
-        document.getElementById('globalToken').addEventListener('input', (e) => {
-            localStorage.setItem('dcs_token', e.target.value);
-        });
-
-        // Load token from localStorage
-        window.addEventListener('load', () => {
-            const savedToken = localStorage.getItem('dcs_token');
-            if (savedToken) {
-                document.getElementById('globalToken').value = savedToken;
-            }
-        });
-
-        // Global error handler for uncaught errors
-        window.addEventListener('error', (event) => {
-            logError('全局错误', 'UNCAUGHT', window.location.href, event.error || new Error(event.message));
-            updateErrorCount();
-        });
-
-        // Global promise rejection handler
-        window.addEventListener('unhandledrejection', (event) => {
-            logError('未处理的Promise拒绝', 'PROMISE', window.location.href, event.reason || new Error('Promise rejected'));
-            updateErrorCount();
-        });
-
-        // Auto-export error log when errors exceed threshold
-        setInterval(() => {
-            if (errorLog.length >= 50) {
-                console.warn(`错误日志已达 ${errorLog.length} 条，建议导出查看`);
-            }
-        }, 60000); // Check every minute
-
-        // ============ User Management Functions ============
-
-        async function createUser() {
-            const username = document.getElementById('createUserUsername').value;
-            const password = document.getElementById('createUserPassword').value;
-            const nickname = document.getElementById('createUserNickname').value;
-            const email = document.getElementById('createUserEmail').value;
-
-            if (!username || !password) {
-                showToast('用户名和密码不能为空', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/users`;
-            const requestData = { username, password, nickname, email };
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: getHeaders(),
-                    body: JSON.stringify(requestData)
-                });
-
-                const data = await response.json();
-                displayResponse('createUserResponse', data);
-
-                if (data.code === 200) {
-                    showToast('用户创建成功', 'success');
-                    // 清空表单
-                    document.getElementById('createUserUsername').value = '';
-                    document.getElementById('createUserPassword').value = '';
-                    document.getElementById('createUserNickname').value = '';
-                    document.getElementById('createUserEmail').value = '';
-                } else {
-                    showToast('创建失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('创建用户', 'POST', url, error, requestData);
-            }
-        }
-
-        async function getUserList() {
-            const current = document.getElementById('userPageCurrent').value;
-            const size = document.getElementById('userPageSize').value;
-            const keyword = document.getElementById('userKeyword').value;
-
-            let url = `${getBaseUrl()}/api/users/page?current=${current}&size=${size}`;
-            if (keyword) {
-                url += `&keyword=${encodeURIComponent(keyword)}`;
-            }
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('userListResponse', data);
-
-                if (data.code === 200) {
-                    showToast('查询成功', 'success');
-                } else {
-                    showToast('查询失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('用户列表查询', 'GET', url, error);
-            }
-        }
-
-        async function updateUser() {
-            const id = document.getElementById('updateUserId').value;
-            const nickname = document.getElementById('updateUserNickname').value;
-            const email = document.getElementById('updateUserEmail').value;
-            const phone = document.getElementById('updateUserPhone').value;
-
-            if (!id) {
-                showToast('请输入用户ID', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/users`;
-            const requestData = { id };
-            if (nickname) requestData.nickname = nickname;
-            if (email) requestData.email = email;
-            if (phone) requestData.phone = phone;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: getHeaders(),
-                    body: JSON.stringify(requestData)
-                });
-
-                const data = await response.json();
-                displayResponse('updateUserResponse', data);
-
-                if (data.code === 200) {
-                    showToast('更新成功', 'success');
-                } else {
-                    showToast('更新失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('更新用户', 'PUT', url, error, requestData);
-            }
-        }
-
-        async function deleteUser() {
-            const id = document.getElementById('deleteUserId').value;
-
-            if (!id) {
-                showToast('请输入用户ID', 'error');
-                return;
-            }
-
-            if (!confirm('确定要删除此用户吗？此操作不可恢复！')) {
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/users/${id}`;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'DELETE',
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('deleteUserResponse', data);
-
-                if (data.code === 200) {
-                    showToast('删除成功', 'success');
-                    document.getElementById('deleteUserId').value = '';
-                } else {
-                    showToast('删除失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('删除用户', 'DELETE', url, error);
-            }
-        }
-
-        // ============ Role Management Functions ============
-
-        async function createRole() {
-            const roleName = document.getElementById('createRoleName').value;
-            const roleKey = document.getElementById('createRoleKey').value;
-
-            if (!roleName || !roleKey) {
-                showToast('角色名称和标识不能为空', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/role`;
-            const requestData = { roleName, roleKey };
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: getHeaders(),
-                    body: JSON.stringify(requestData)
-                });
-
-                const data = await response.json();
-                displayResponse('createRoleResponse', data);
-
-                if (data.code === 200) {
-                    showToast('角色创建成功', 'success');
-                    document.getElementById('createRoleName').value = '';
-                    document.getElementById('createRoleKey').value = '';
-                } else {
-                    showToast('创建失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('创建角色', 'POST', url, error, requestData);
-            }
-        }
-
-        async function getRoleList() {
-            const current = document.getElementById('rolePageCurrent').value;
-            const size = document.getElementById('rolePageSize').value;
-
-            const url = `${getBaseUrl()}/api/role/page?current=${current}&size=${size}`;
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('roleListResponse', data);
-
-                if (data.code === 200) {
-                    showToast('查询成功', 'success');
-                } else {
-                    showToast('查询失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('角色列表查询', 'GET', url, error);
-            }
-        }
-
-        async function updateRole() {
-            const id = document.getElementById('updateRoleId').value;
-            const roleName = document.getElementById('updateRoleName').value;
-
-            if (!id || !roleName) {
-                showToast('角色ID和名称不能为空', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/role`;
-            const requestData = { id, roleName };
-
-            try {
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: getHeaders(),
-                    body: JSON.stringify(requestData)
-                });
-
-                const data = await response.json();
-                displayResponse('updateRoleResponse', data);
-
-                if (data.code === 200) {
-                    showToast('更新成功', 'success');
-                } else {
-                    showToast('更新失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('更新角色', 'PUT', url, error, requestData);
-            }
-        }
-
-        async function deleteRole() {
-            const id = document.getElementById('deleteRoleId').value;
-
-            if (!id) {
-                showToast('请输入角色ID', 'error');
-                return;
-            }
-
-            if (!confirm('确定要删除此角色吗？此操作不可恢复！')) {
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/role/${id}`;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'DELETE',
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('deleteRoleResponse', data);
-
-                if (data.code === 200) {
-                    showToast('删除成功', 'success');
-                    document.getElementById('deleteRoleId').value = '';
-                } else {
-                    showToast('删除失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('删除角色', 'DELETE', url, error);
-            }
-        }
-
-        async function assignRoleToUser() {
-            const userId = document.getElementById('assignRoleUserId').value;
-            const roleId = document.getElementById('assignRoleRoleId').value;
-
-            if (!userId || !roleId) {
-                showToast('用户ID和角色ID不能为空', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/user/assign-role`;
-            // 后端期望roleIds是数组
-            const requestData = {
-                userId,
-                roleIds: [roleId]  // 修复：将单个roleId转换为数组
-            };
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: getHeaders(),
-                    body: JSON.stringify(requestData)
-                });
-
-                const data = await response.json();
-                displayResponse('assignRoleResponse', data);
-
-                if (data.code === 200) {
-                    showToast('分配成功', 'success');
-                } else {
-                    showToast('分配失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('分配角色', 'POST', url, error, requestData);
-            }
-        }
-
-        // ============ Template Management Functions ============
-
-        async function createTemplate() {
-            const templateName = document.getElementById('createTemplateName').value;
-            const templateCode = document.getElementById('createTemplateCode').value;
-            const kvConfig = document.getElementById('createTemplateKvConfig').value;
-            const tableConfig = document.getElementById('createTemplateTableConfig').value;
-
-            if (!templateName || !templateCode) {
-                showToast('模板名称和编码不能为空', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/template`;
-            const requestData = {
-                templateName,
-                templateCode
-            };
-
-            // 解析JSON配置
-            if (kvConfig) {
-                try {
-                    requestData.targetKvConfig = JSON.parse(kvConfig);
-                } catch (e) {
-                    showToast('KV配置JSON格式错误', 'error');
-                    return;
-                }
-            }
-
-            if (tableConfig) {
-                try {
-                    requestData.targetTableConfig = JSON.parse(tableConfig);
-                } catch (e) {
-                    showToast('表格配置JSON格式错误', 'error');
-                    return;
-                }
-            }
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: getHeaders(),
-                    body: JSON.stringify(requestData)
-                });
-
-                const data = await response.json();
-                displayResponse('createTemplateResponse', data);
-
-                if (data.code === 200) {
-                    showToast('模板创建成功', 'success');
-                    document.getElementById('createTemplateName').value = '';
-                    document.getElementById('createTemplateCode').value = '';
-                    document.getElementById('createTemplateKvConfig').value = '';
-                    document.getElementById('createTemplateTableConfig').value = '';
-                } else {
-                    showToast('创建失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('创建模板', 'POST', url, error, requestData);
-            }
-        }
-
-        async function getTemplateList() {
-            const current = document.getElementById('templatePageCurrent').value;
-            const size = document.getElementById('templatePageSize').value;
-            const keyword = document.getElementById('templateKeyword').value;
-
-            let url = `${getBaseUrl()}/api/template/page?current=${current}&size=${size}`;
-            if (keyword) {
-                url += `&keyword=${encodeURIComponent(keyword)}`;
-            }
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('templateListResponse', data);
-
-                if (data.code === 200) {
-                    showToast('查询成功', 'success');
-                } else {
-                    showToast('查询失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('模板列表查询', 'GET', url, error);
-            }
-        }
-
-        async function getTemplateById() {
-            const id = document.getElementById('getTemplateId').value;
-
-            if (!id) {
-                showToast('请输入模板ID', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/template/${id}`;
-
-            try {
-                const response = await fetch(url, {
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('getTemplateResponse', data);
-
-                if (data.code === 200) {
-                    showToast('查询成功', 'success');
-                } else {
-                    showToast('查询失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('模板详情查询', 'GET', url, error);
-            }
-        }
-
-        async function updateTemplate() {
-            const id = document.getElementById('updateTemplateId').value;
-            const templateName = document.getElementById('updateTemplateName').value;
-            const kvConfig = document.getElementById('updateTemplateKvConfig').value;
-
-            if (!id) {
-                showToast('请输入模板ID', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/template`;
-            const requestData = { id };
-
-            if (templateName) requestData.templateName = templateName;
-
-            if (kvConfig) {
-                try {
-                    requestData.targetKvConfig = JSON.parse(kvConfig);
-                } catch (e) {
-                    showToast('KV配置JSON格式错误', 'error');
-                    return;
-                }
-            }
-
-            try {
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: getHeaders(),
-                    body: JSON.stringify(requestData)
-                });
-
-                const data = await response.json();
-                displayResponse('updateTemplateResponse', data);
-
-                if (data.code === 200) {
-                    showToast('更新成功', 'success');
-                } else {
-                    showToast('更新失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('更新模板', 'PUT', url, error, requestData);
-            }
-        }
-
-        async function deleteTemplate() {
-            const id = document.getElementById('deleteTemplateId').value;
-
-            if (!id) {
-                showToast('请输入模板ID', 'error');
-                return;
-            }
-
-            if (!confirm('确定要删除此模板吗？此操作不可恢复！')) {
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/template/${id}`;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'DELETE',
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('deleteTemplateResponse', data);
-
-                if (data.code === 200) {
-                    showToast('删除成功', 'success');
-                    document.getElementById('deleteTemplateId').value = '';
-                } else {
-                    showToast('删除失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('删除模板', 'DELETE', url, error);
-            }
-        }
-
-        async function toggleTemplateStatus() {
-            const id = document.getElementById('toggleTemplateId').value;
-            const status = document.getElementById('toggleTemplateStatus').value;
-
-            if (!id) {
-                showToast('请输入模板ID', 'error');
-                return;
-            }
-
-            const url = `${getBaseUrl()}/api/template/${id}/status?status=${status}`;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: getHeaders()
-                });
-
-                const data = await response.json();
-                displayResponse('toggleTemplateResponse', data);
-
-                if (data.code === 200) {
-                    showToast('状态更新成功', 'success');
-                } else {
-                    showToast('更新失败: ' + data.message, 'error');
-                }
-            } catch (error) {
-                handleApiError('更新模板状态', 'PUT', url, error);
+                handleApiError('获取统计数据', 'GET', url, error);
             }
         }
     </script>

@@ -567,67 +567,49 @@
 
 ## 6. 🤖 AI处理
 
-### 6.1 AI智能处理
-- **接口**: `POST /api/v1/ai/process`
-- **需要Token**: ✅
-- **请求参数**:
-  ```json
-  {
-    "fileId": "555",
-    "options": {
-      "use_llm": true,
-      "llm_image": false,
-      "enhance_image": true,
-      "detect_table": true,
-      "llm_provider": "Qwen",
-      "llm_model": "qwen-max"
-    },
-    "templateConfig": {
-      "fields": []
-    }
-  }
-  ```
-- **响应数据**:
-  ```json
-  {
-    "fileId": "555",
-    "fileInfo": {
-      "bucket": "document-files",
-      "object": "2025/12/09/xxx.jpg",
-      "url": "http://minio-url/...",
-      "fileId": "555"
-    },
-    "aiResult": {
-      "document_type": "成绩单",
-      "confidence_overall": 0.87,
-      "basic_info": {
-        "name": "张三",
-        "student_id": "2021001",
-        "school_name": "XX大学"
-      },
-      "academic_info": {},
-      "certificate_info": {},
-      "financial_info": {},
-      "leave_info": {},
-      "courses": [
-        {
-          "course_name": "数据结构",
-          "score": 85,
-          "credit": 4
-        }
-      ],
-      "summary": "类型 成绩单，姓名 张三，学校 XX大学",
-      "text": "OCR识别的原始文本",
-      "tables": [],
-      "fields": {},
-      "document_type_candidates": {
-        "成绩单": 0.98,
-        "毕业证书": 0.01
-      }
-    }
-  }
-  ```
+| 方法 | 接口 | 说明 | 是否需要Token |
+|-----|------|------|--------------|
+| POST | /api/v1/ai/process | 使用 fileId、Base64 或文本触发统一AI处理 | ✅ |
+| POST | /api/v1/ai/process-file | 直接上传Multipart文件并立即处理 | ✅ |
+| GET | /api/v1/ai/status | 查询Python AI服务状态与版本 | ✅ |
 
+### 6.1 统一AI处理
+- **接口**: `POST /api/v1/ai/process`
+- **Content-Type**: `application/json`
+- **请求参数**:
+  - `fileId`: MinIO 存量文件ID（可选）
+  - `fileContent`: Base64 内容（可选，传此字段时需带 `fileName`，并优先于 fileId）
+  - `fileName`: Base64 内容对应的原始文件名
+  - `text`: 纯文本（可选，仅LLM解析时使用）
+  - `options`: 处理选项，如 `use_llm`、`llm_image`、`enhance_image`、`detect_table`、`llm_provider`、`llm_model`
+  - `template_config`: 模板配置（可选）
+- **响应数据**:
+  - `taskId`: 任务ID
+  - `status`: 任务状态（`PENDING`/`RUNNING`/`SUCCESS` 等）
+
+### 6.2 上传并处理文件
+- **接口**: `POST /api/v1/ai/process-file`
+- **需要Token**: ✅
+- **Content-Type**: `multipart/form-data`
+- **表单字段**:
+  - `file`: 实际文件（必填）
+  - `options`: JSON字符串（可选，与 `/process` 的 `options` 字段一致）
+  - `template_config`: JSON字符串（可选）
+- **响应数据**: 同 `POST /api/v1/ai/process`
+
+### 6.3 AI服务状态
+- **接口**: `GET /api/v1/ai/status`
+- **需要Token**: ✅
+- **响应示例**:
+```json
+{
+  "service": "python-ai",
+  "status": "UP",
+  "version": "2025.12.16",
+  "uptime": 123456,
+  "queueSize": 0
+}
+```
 ---
 
 ## 7. ✅ 审核管理
@@ -1026,171 +1008,3 @@ if (response.code === 200) {
    → GET /api/file/page
    → 显示刚上传的文件
 ```
-
----
-
-## 🎨 前端页面建议
-
-### 推荐页面结构
-```
-系统首页 (/)
-├── 登录页 (/login)
-├── 注册页 (/register)
-├── 主控制台 (/dashboard)
-│   ├── 数据概览
-│   ├── 快捷操作
-│   └── 最近文档
-├── 文件管理 (/files)
-│   ├── 文件列表 (/files/list)
-│   ├── 上传文件 (/files/upload)
-│   └── 文件详情 (/files/:id)
-├── AI识别 (/ai)
-│   ├── 识别结果 (/ai/result/:id)
-│   └── 识别历史 (/ai/history)
-├── 文档分类 (/classification)
-│   ├── 分类列表 (/classification/types)
-│   ├── 文档列表 (/classification/:type)
-│   └── 文档详情 (/classification/detail/:id)
-├── 审核管理 (/audit)
-│   ├── 待审核列表 (/audit/pending)
-│   ├── 审核详情 (/audit/:id)
-│   └── 审核历史 (/audit/history)
-├── 数据统计 (/statistics)
-│   ├── 数据面板 (/statistics/dashboard)
-│   └── 报表导出 (/statistics/export)
-├── 系统管理 (/admin)
-│   ├── 用户管理 (/admin/users)
-│   ├── 角色管理 (/admin/roles)
-│   └── 模板管理 (/admin/templates)
-└── 个人中心 (/profile)
-    ├── 个人信息 (/profile/info)
-    └── 修改密码 (/profile/password)
-```
-
-### 各页面需要的接口
-
-**登录页**
-- POST /api/auth/login
-- POST /api/auth/register
-
-**主控制台**
-- GET /api/dashboard/stats
-- GET /api/file/page?size=5 (最近文件)
-- GET /api/auth/me
-
-**文件列表页**
-- GET /api/file/page
-- DELETE /api/file/{id}
-- POST /api/file/upload
-
-**AI识别页**
-- POST /api/v1/ai/process
-- GET /api/audit/result/{id}
-- GET /api/audit/preview/{id}
-
-**文档分类页**
-- GET /api/classification/types
-- GET /api/classification/list
-- GET /api/classification/detail/{id}
-- GET /api/classification/search
-
-**审核管理页**
-- GET /api/file/page?status=3
-- GET /api/audit/result/{id}
-- POST /api/audit/submit
-- GET /api/audit/history/{id}
-
-**数据统计页**
-- GET /api/dashboard/stats
-- GET /api/dashboard/trend
-- GET /api/dashboard/file-type-distribution
-- GET /api/dashboard/confidence-distribution
-
-**用户管理页**
-- GET /api/user/page
-- POST /api/user
-- PUT /api/user
-- DELETE /api/user/{id}
-- POST /api/user/assign-role
-
-**角色管理页**
-- GET /api/role/page
-- POST /api/role
-- PUT /api/role
-- DELETE /api/role/{id}
-
-**模板管理页**
-- GET /api/template/page
-- POST /api/template
-- PUT /api/template
-- DELETE /api/template/{id}
-
----
-
-## 🔔 常见问题与解决方案
-
-### Q1: Token过期怎么办？
-```
-【问题】用户操作过程中Token过期，返回401
-
-【解决方案】
-1. 拦截器捕获401错误
-2. 自动调用刷新Token接口
-   → POST /api/auth/refresh
-3. 获取新Token并更新localStorage
-4. 重新发起原请求
-5. 如果刷新失败，跳转登录页
-```
-
-### Q2: 文件上传失败怎么处理？
-```
-【问题】文件太大或网络不稳定导致上传失败
-
-【解决方案】
-1. 前端限制文件大小（如10MB）
-2. 添加重试机制（最多3次）
-3. 使用分片上传（大文件）
-4. 显示详细错误信息给用户
-5. 提供"取消上传"功能
-```
-
-### Q3: AI识别时间过长怎么办？
-```
-【问题】AI处理需要300秒以上，用户等待焦虑
-
-【解决方案】
-1. 显示进度条或加载动画
-2. 提示预计等待时间："预计需要300秒"
-3. 允许用户后台处理，完成后通知
-4. 使用WebSocket推送处理进度
-5. 提供"稍后查看结果"选项
-```
-
-### Q4: 如何处理分页数据？
-```
-【问题】需要加载大量数据，如何优化
-
-【解决方案】
-1. 使用虚拟滚动（大列表）
-2. 懒加载（滚动到底部自动加载）
-3. 缓存已加载的页面数据
-4. 提供"跳转到指定页"功能
-5. 显示总数和当前范围："显示1-10，共500条"
-```
-
-### Q5: 搜索结果太多怎么办？
-```
-【问题】搜索关键词返回几百条结果
-
-【解决方案】
-1. 使用分页显示
-2. 添加更多筛选条件
-   - 文档类型
-   - 上传时间范围
-   - 置信度范围
-3. 支持多关键词搜索
-4. 提供排序功能（时间、置信度）
-5. 高亮显示匹配的关键词
-```
-
-

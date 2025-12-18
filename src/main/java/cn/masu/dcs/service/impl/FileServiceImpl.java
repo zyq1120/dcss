@@ -1,13 +1,15 @@
 package cn.masu.dcs.service.impl;
 
-import cn.masu.dcs.common.config.GlobalExceptionHandler.BusinessException;
+import cn.masu.dcs.common.exception.BusinessException;
 import cn.masu.dcs.common.config.MinioConfig;
 import cn.masu.dcs.common.result.ErrorCode;
 import cn.masu.dcs.common.result.PageResult;
 import cn.masu.dcs.common.util.MinioUtils;
 import cn.masu.dcs.common.util.SnowflakeIdGenerator;
 import cn.masu.dcs.dto.FileUpdateStatusDTO;
+import cn.masu.dcs.entity.DocumentExtractMain;
 import cn.masu.dcs.entity.DocumentFile;
+import cn.masu.dcs.mapper.DocumentExtractMainMapper;
 import cn.masu.dcs.mapper.DocumentFileMapper;
 import cn.masu.dcs.service.FileService;
 import cn.masu.dcs.vo.FileDetailVO;
@@ -24,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -38,6 +41,7 @@ public class FileServiceImpl extends ServiceImpl<DocumentFileMapper, DocumentFil
     private final SnowflakeIdGenerator idGenerator;
     private final MinioUtils minioUtils;
     private final MinioConfig minioConfig;
+    private final DocumentExtractMainMapper extractMainMapper;
 
     @Override
     public Long uploadFile(MultipartFile file, Long templateId, Long userId) {
@@ -173,22 +177,53 @@ public class FileServiceImpl extends ServiceImpl<DocumentFileMapper, DocumentFil
         }
 
         if (status != null) {
-            wrapper.eq(DocumentFile::getProcessStatus, status);  // ✅ 修复：使用processStatus
+            wrapper.eq(DocumentFile::getProcessStatus, status);
         }
 
         if (userId != null) {
-            wrapper.eq(DocumentFile::getUserId, userId);         // ✅ 修复：使用userId
+            wrapper.eq(DocumentFile::getUserId, userId);
         }
 
         wrapper.orderByDesc(DocumentFile::getCreateTime);
 
         Page<DocumentFile> result = baseMapper.selectPage(page, wrapper);
 
+        // 批量获取文件对应的审核状态
+        List<Long> fileIds = result.getRecords().stream()
+            .map(DocumentFile::getId)
+            .collect(Collectors.toList());
+
+        Map<Long, Integer> auditStatusMap = getAuditStatusMap(fileIds);
+
         List<FileDetailVO> voList = result.getRecords().stream()
-            .map(this::convertToVO)
+            .map(file -> convertToVO(file, auditStatusMap.get(file.getId())))
             .collect(Collectors.toList());
 
         return PageResult.of(result.getTotal(), result.getCurrent(), result.getSize(), voList);
+    }
+
+    /**
+     * 批量获取文件的审核状态
+     * 从 document_extract_main 表获取 status 字段
+     * status: 0=待审核, 2=已通过
+     */
+    private Map<Long, Integer> getAuditStatusMap(List<Long> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            return Map.of();
+        }
+
+        LambdaQueryWrapper<DocumentExtractMain> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(DocumentExtractMain::getFileId, fileIds)
+               .select(DocumentExtractMain::getFileId, DocumentExtractMain::getStatus);
+
+        List<DocumentExtractMain> extracts = extractMainMapper.selectList(wrapper);
+
+        return extracts.stream()
+            .collect(Collectors.toMap(
+                DocumentExtractMain::getFileId,
+                DocumentExtractMain::getStatus,
+                (existing, replacement) -> replacement  // 如果有多个，取最新的
+            ));
     }
 
     @Override
@@ -205,14 +240,45 @@ public class FileServiceImpl extends ServiceImpl<DocumentFileMapper, DocumentFil
         return result > 0;
     }
 
-    private FileDetailVO convertToVO(DocumentFile file) {
+    private FileDetailVO convertToVO(DocumentFile file, Integer auditStatus) {
         FileDetailVO vo = new FileDetailVO();
         BeanUtils.copyProperties(file, vo);
 
-        // ✅ 修复：使用processStatus代替多个status字段
+        // 设置处理状态名称
         vo.setStatusName(getProcessStatusName(file.getProcessStatus()));
-        // 旧的OCR/NLP/Audit状态字段已废弃，不再需要
+
+        // 设置审核状态
+        // auditStatus: 0=待审核, 2=已通过（来自 document_extract_main.status）
+        if (auditStatus != null) {
+            vo.setAuditStatus(auditStatus);
+            vo.setAuditStatusName(getAuditStatusName(auditStatus));
+        }
+
         return vo;
+    }
+
+    /**
+     * 兼容旧代码的转换方法
+     */
+    private FileDetailVO convertToVO(DocumentFile file) {
+        return convertToVO(file, null);
+    }
+
+    /**
+     * 获取审核状态名称
+     * 0=待审核, 2=已通过
+     */
+    private String getAuditStatusName(Integer status) {
+        if (status == null) {
+            return "待审核";
+        }
+        return switch (status) {
+            case 0 -> "待审核";
+            case 1 -> "审核中";
+            case 2 -> "已通过";
+            case 3 -> "已驳回";
+            default -> "未知";
+        };
     }
 
     private String getFileExtension(String filename) {

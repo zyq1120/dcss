@@ -30,9 +30,6 @@ public class MinioConfig {
 
     /**
      * MinIO服务地址
-     * <p>
-     * 示例：http://localhost:9000
-     * </p>
      */
     private String endpoint;
 
@@ -62,10 +59,6 @@ public class MinioConfig {
 
     /**
      * 文件访问URL前缀
-     * <p>
-     * 用于拼接文件的完整访问路径
-     * 示例：http://localhost:9000/documents/
-     * </p>
      */
     private String urlPrefix;
 

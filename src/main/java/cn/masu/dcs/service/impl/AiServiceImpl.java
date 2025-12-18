@@ -1,14 +1,16 @@
 package cn.masu.dcs.service.impl;
 
-import cn.masu.dcs.common.config.GlobalExceptionHandler.BusinessException;
+import cn.masu.dcs.common.exception.BusinessException;
 import cn.masu.dcs.common.result.ErrorCode;
 import cn.masu.dcs.dto.AiProcessRequest;
+import cn.masu.dcs.dto.AiDocProcessRequest;
 import cn.masu.dcs.entity.DocumentFile;
 import cn.masu.dcs.entity.SysDocTemplate;
 import cn.masu.dcs.mapper.DocumentFileMapper;
 import cn.masu.dcs.mapper.SysDocTemplateMapper;
-import cn.masu.dcs.service.AiProcessService;
+
 import cn.masu.dcs.service.AiService;
+import cn.masu.dcs.service.AiProcessorService;
 import cn.masu.dcs.service.FileService;
 import cn.masu.dcs.vo.AiProcessResponse;
 import cn.masu.dcs.vo.FileDetailVO;
@@ -19,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,8 +37,7 @@ import java.util.Objects;
 public class AiServiceImpl implements AiService {
 
     private final FileService fileService;
-    private final AiProcessService aiProcessService;
-    private final DocumentIntelligentProcessService documentIntelligentProcessService;
+    private final AiProcessorService aiProcessorService;
     private final DocumentFileMapper fileMapper;
     private final SysDocTemplateMapper templateMapper;
 
@@ -45,6 +45,18 @@ public class AiServiceImpl implements AiService {
      * 批量处理最大文件数限制
      */
     private static final int MAX_BATCH_FILES = 50;
+
+    /**
+     * 已归档状态
+     */
+    private static final int STATUS_ARCHIVED = 4;
+
+    /**
+     * 结果字段名常量
+     */
+    private static final String KEY_FILE_ID = "fileId";
+    private static final String KEY_AI_RESULT = "aiResult";
+    private static final String KEY_CONFIDENCE = "confidence_overall";
 
     @Override
     public AiProcessResponse uploadAndProcess(MultipartFile file, Long templateId, Long userId) {
@@ -61,11 +73,8 @@ public class AiServiceImpl implements AiService {
             Long fileId = fileService.uploadFile(file, templateId, userId);
             log.info("文件上传成功: fileId={}, fileName={}", fileId, fileName);
 
-            // 2. 获取文件详情
-            FileDetailVO fileDetail = getFileDetailOrThrow(fileId);
-
-            // 3. 调用AI服务解析
-            AiProcessResponse response = processFileWithAi(fileId, fileDetail.getFilePath());
+            // 2. 调用AI服务解析
+            AiProcessResponse response = processFileWithAi(fileId);
             response.setFileId(fileId);
             response.setFileName(fileName);
 
@@ -96,7 +105,12 @@ public class AiServiceImpl implements AiService {
         log.info("开始处理文本解析: textLength={}, fileId={}", textLength, request.getFileId());
 
         try {
-            AiProcessResponse response = aiProcessService.process(request);
+            // 转换为新的请求格式
+            AiDocProcessRequest docRequest = convertToDocRequest(request);
+            Map<String, Object> result = aiProcessorService.processDocument(docRequest);
+
+            // 转换结果为 AiProcessResponse
+            AiProcessResponse response = convertToAiProcessResponse(result);
             validateAiResponse(response, "文本解析");
 
             log.info("文本解析完成: confidence={}", response.getConfidence());
@@ -125,7 +139,7 @@ public class AiServiceImpl implements AiService {
             }
 
             // 3. 重新解析
-            AiProcessResponse response = processFileWithAi(fileId, fileDetail.getFilePath());
+            AiProcessResponse response = processFileWithAi(fileId);
             response.setFileId(fileId);
             response.setFileName(fileDetail.getFileName());
 
@@ -150,13 +164,13 @@ public class AiServiceImpl implements AiService {
         validateDataConsistency(fileId, response);
 
         // 验证文件存在
-        FileDetailVO fileDetail = getFileDetailOrThrow(fileId);
+        getFileDetailOrThrow(fileId);
 
         try {
             // 获取文件实体并更新状态为已归档
             DocumentFile file = fileMapper.selectById(fileId);
             if (file != null) {
-                file.setProcessStatus(4);  // 已归档
+                file.setProcessStatus(STATUS_ARCHIVED);
                 fileMapper.updateById(file);
             }
 
@@ -263,15 +277,10 @@ public class AiServiceImpl implements AiService {
     /**
      * 使用AI服务处理文件
      */
-    private AiProcessResponse processFileWithAi(Long fileId, String filePath) {
-        AiProcessRequest aiRequest = new AiProcessRequest();
-        aiRequest.setFileId(fileId);
-        aiRequest.setFilePath(filePath);
-
+    private AiProcessResponse processFileWithAi(Long fileId) {
         // 获取文件信息，检查是否有模板配置
         DocumentFile file = fileMapper.selectById(fileId);
         if (file != null && file.getTemplateId() != null) {
-            // 查询模板配置
             SysDocTemplate template = templateMapper.selectById(file.getTemplateId());
             if (template != null) {
                 log.info("文件关联模板: templateId={}, templateCode={}",
@@ -279,7 +288,15 @@ public class AiServiceImpl implements AiService {
             }
         }
 
-        AiProcessResponse response = aiProcessService.process(aiRequest);
+        // 构建请求
+        AiDocProcessRequest docRequest = new AiDocProcessRequest();
+        docRequest.setFileId(fileId);
+
+        // 调用AI服务
+        Map<String, Object> result = aiProcessorService.processDocument(docRequest);
+
+        // 转换结果
+        AiProcessResponse response = convertToAiProcessResponse(result);
         validateAiResponse(response, "AI处理");
 
         return response;
@@ -328,6 +345,53 @@ public class AiServiceImpl implements AiService {
         errorResponse.setSuccess(false);
         errorResponse.setErrorMessage(errorMessage);
         return errorResponse;
+    }
+
+    /**
+     * 将AiProcessRequest转换为AiDocProcessRequest
+     */
+    private AiDocProcessRequest convertToDocRequest(AiProcessRequest request) {
+        AiDocProcessRequest docRequest = new AiDocProcessRequest();
+        docRequest.setFileId(request.getFileId());
+        docRequest.setText(request.getText());
+        return docRequest;
+    }
+
+    /**
+     * 将Map结果转换为AiProcessResponse
+     */
+    @SuppressWarnings("unchecked")
+    private AiProcessResponse convertToAiProcessResponse(Map<String, Object> result) {
+        if (result == null) {
+            return null;
+        }
+
+        AiProcessResponse response = new AiProcessResponse();
+        response.setSuccess(true);
+
+        if (result.containsKey(KEY_FILE_ID)) {
+            Object fileIdObj = result.get(KEY_FILE_ID);
+            if (fileIdObj instanceof Long) {
+                response.setFileId((Long) fileIdObj);
+            } else if (fileIdObj instanceof Number) {
+                response.setFileId(((Number) fileIdObj).longValue());
+            }
+        }
+
+        if (result.containsKey(KEY_AI_RESULT)) {
+            Object aiResult = result.get(KEY_AI_RESULT);
+            if (aiResult instanceof Map) {
+                Map<String, Object> aiResultMap = (Map<String, Object>) aiResult;
+                if (aiResultMap.containsKey(KEY_CONFIDENCE)) {
+                    Object conf = aiResultMap.get(KEY_CONFIDENCE);
+                    if (conf instanceof Number) {
+                        response.setConfidence(((Number) conf).doubleValue());
+                    }
+                }
+            }
+        }
+
+        return response;
     }
 }
 

@@ -110,11 +110,52 @@
 
 | 方法 | 接口 | 说明 | 是否需要Token |
 |-----|------|------|--------------|
-| POST | /api/v1/ai/process | AI智能处理 | ✅ |
-| POST | /api/ai/upload-and-process | 上传并处理 | ✅ |
-| POST | /api/ai/process-text | 纯文本处理 | ✅ |
-| POST | /api/ai/reprocess/{fileId} | 重新处理文件 | ✅ |
-| POST | /api/ai/save-verified | 保存校对后的数据 | ✅ |
+| POST | /api/v1/ai/process | 使用 fileId/Base64/text 触发统一AI处理 | ✅ |
+| POST | /api/v1/ai/process-file | 上传 Multipart 文件并触发AI处理 | ✅ |
+| GET  | /api/v1/ai/status | 查询Python AI服务运行状态 | ✅ |
+
+### 6.1 统一AI处理
+- **接口**: `POST /api/v1/ai/process`
+- **Content-Type**: `application/json`
+- **请求参数**:
+  - `fileId`: 文件ID（可选，直接读取存量MinIO文件）
+  - `fileContent`: Base64格式的文件内容（可选，填充时需同时传 `fileName`，优先级高于 fileId）
+  - `fileName`: 当传 Base64 内容时的原始文件名（例如 `test.pdf`）
+  - `text`: 纯文本内容（可选，适用于只做LLM解析的场景）
+  - `options`: JSON对象，控制AI处理流程，支持
+    - `use_llm`: 是否启用LLM兜底
+    - `llm_image`: 是否直接使用多模态LLM读图
+    - `enhance_image`: 是否先进行图像增强
+    - `detect_table`: 是否启用表格检测
+    - `llm_provider`: 指定使用的LLM供应商（如 `qwen`、`gemini`、`openai`）
+    - `llm_model`: 自定义模型名称
+  - `template_config`: 模板配置（可选，用于自定义字段抽取）
+- **响应数据**:
+  - `taskId`: 处理任务ID
+  - `status`: 任务状态，初始为 `PENDING`
+
+### 6.2 上传并处理文件
+- **接口**: `POST /api/v1/ai/process-file`
+- **Content-Type**: `multipart/form-data`
+- **表单字段**:
+  - `file`: 文件对象（必填）
+  - `options`: JSON字符串，结构与 `/process` 的 `options` 字段一致（可选）
+  - `template_config`: JSON字符串（可选）
+- **响应数据**: 同 `POST /api/v1/ai/process`
+
+### 6.3 AI服务状态
+- **接口**: `GET /api/v1/ai/status`
+- **说明**: 返回Python侧AI服务的版本、可用性、排队信息等
+- **响应示例**:
+```json
+{
+  "service": "python-ai",
+  "status": "UP",
+  "version": "2025.12.16",
+  "uptime": 123456,
+  "queueSize": 0
+}
+```
 
 ## 7. 审核管理 (Audit)
 
@@ -293,4 +334,3 @@ curl -X GET http://localhost:8080/api/dashboard/stats \
 4. **时间格式**：统一使用 `yyyy-MM-dd HH:mm:ss` 格式
 5. **文件上传**：使用 `multipart/form-data` 格式
 6. **JSON配置**：模板的KV和表格配置需要是合法的JSON数组格式
-

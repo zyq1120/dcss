@@ -26,7 +26,6 @@ import lombok.Getter;
 @Getter
 public enum ErrorCode {
 
-    // ==================== 通用错误码 ====================
 
     /** 操作成功 */
     SUCCESS(200, "操作成功"),

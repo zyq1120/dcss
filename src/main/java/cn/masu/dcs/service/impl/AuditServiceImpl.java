@@ -11,7 +11,7 @@ import cn.masu.dcs.mapper.DocumentFileMapper;
 import cn.masu.dcs.mapper.SysUserMapper;
 import cn.masu.dcs.service.AuditService;
 import cn.masu.dcs.vo.AuditRecordVO;
-import cn.masu.dcs.common.config.GlobalExceptionHandler.BusinessException;
+import cn.masu.dcs.common.exception.BusinessException;
 import cn.masu.dcs.common.result.ErrorCode;
 import cn.masu.dcs.common.result.PageResult;
 import cn.masu.dcs.common.util.SnowflakeIdGenerator;
@@ -215,8 +215,14 @@ public class AuditServiceImpl extends ServiceImpl<AuditRecordMapper, AuditRecord
 
         DocumentExtractMain extractMain = extractMainMapper.selectOne(wrapper);
         if (extractMain == null) {
-            log.error("提取数据不存在: fileId={}", fileId);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "未找到AI处理结果");
+            log.warn("提取数据不存在: fileId={}, 文件可能尚未进行AI处理", fileId);
+            // 返回空结果而不是抛出异常，便于前端判断
+            Map<String, Object> emptyResult = new HashMap<>(4);
+            emptyResult.put("fileId", fileId);
+            emptyResult.put("status", -1);
+            emptyResult.put("message", "文件尚未进行AI处理，请先触发AI处理");
+            emptyResult.put("needProcess", true);
+            return emptyResult;
         }
 
         try {
@@ -295,25 +301,16 @@ public class AuditServiceImpl extends ServiceImpl<AuditRecordMapper, AuditRecord
         }
 
         try {
-            // 解析现有KV数据
-            Map<String, Object> currentKvData = new HashMap<>(16);
-            if (StringUtils.hasText(extractMain.getKvDataJson())) {
-                try {
-                    currentKvData = objectMapper.readValue(
-                            extractMain.getKvDataJson(),
-                            objectMapper.getTypeFactory().constructMapType(HashMap.class, String.class, Object.class)
-                    );
-                } catch (Exception e) {
-                    log.warn("解析现有KV数据失败，将使用空数据: fileId={}", fileId, e);
-                }
-            }
+            Map<String, Object> currentKvData = parseJsonToMap(
+                extractMain.getKvDataJson(), "解析现有KV数据");
+            Map<String, Object> extractResultData = parseJsonToMap(
+                extractMain.getExtractResult(), "解析提取结果");
 
-            // 合并修改的字段
             currentKvData.putAll(fields);
+            extractResultData.putAll(fields);
 
-            // 更新数据库
             extractMain.setKvDataJson(objectMapper.writeValueAsString(currentKvData));
-            // 设置为待校对状态
+            extractMain.setExtractResult(objectMapper.writeValueAsString(extractResultData));
             extractMain.setStatus(0);
             extractMainMapper.updateById(extractMain);
 
@@ -334,6 +331,22 @@ public class AuditServiceImpl extends ServiceImpl<AuditRecordMapper, AuditRecord
         } catch (Exception e) {
             log.error("修改字段失败: fileId={}", fileId, e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "修改字段失败: " + e.getMessage());
+        }
+    }
+
+    private Map<String, Object> parseJsonToMap(String json, String logPrefix) {
+        Map<String, Object> result = new HashMap<>(16);
+        if (!StringUtils.hasText(json)) {
+            return result;
+        }
+        try {
+            return objectMapper.readValue(
+                json,
+                objectMapper.getTypeFactory().constructMapType(HashMap.class, String.class, Object.class)
+            );
+        } catch (Exception e) {
+            log.warn("{}失败: {}", logPrefix, e.getMessage());
+            return result;
         }
     }
 }

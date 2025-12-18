@@ -38,5 +38,13 @@ public class FileDetailVO {
     private String auditStatusName;
     private Date createTime;
     private Date updateTime;
+
+    /**
+     * 获取文件ID（别名，方便前端获取）
+     */
+    @JsonSerialize(using = ToStringSerializer.class)
+    public Long getFileId() {
+        return id;
+    }
 }
 

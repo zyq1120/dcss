@@ -1,0 +1,211 @@
+package cn.masu.dcs.service.impl;
+
+import cn.masu.dcs.common.exception.BusinessException;
+import cn.masu.dcs.common.result.ErrorCode;
+import cn.masu.dcs.common.util.SnowflakeIdGenerator;
+import cn.masu.dcs.entity.DocumentExtractDetail;
+import cn.masu.dcs.entity.DocumentExtractMain;
+import cn.masu.dcs.entity.DocumentFile;
+import cn.masu.dcs.mapper.DocumentExtractDetailMapper;
+import cn.masu.dcs.mapper.DocumentExtractMainMapper;
+import cn.masu.dcs.mapper.DocumentFileMapper;
+import cn.masu.dcs.service.AiResultPersistenceService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+/**
+ * AI结果持久化服务实现
+ * <p>
+ * 专门负责AI处理结果的数据库事务操作，解决事务自调用问题
+ * </p>
+ *
+ * @author zyq
+ * @since 2025-12-17
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AiResultPersistenceServiceImpl implements AiResultPersistenceService {
+
+    private final SnowflakeIdGenerator idGenerator;
+    private final DocumentFileMapper fileMapper;
+    private final DocumentExtractMainMapper extractMainMapper;
+    private final DocumentExtractDetailMapper extractDetailMapper;
+    private final ObjectMapper objectMapper;
+
+    private static final int STATUS_PENDING = 0;
+    private static final int STATUS_UNVERIFIED = 0;
+
+    private static final String FIELD_BASIC_INFO = "basic_info";
+    private static final String FIELD_ACADEMIC_INFO = "academic_info";
+    private static final String FIELD_CERTIFICATE_INFO = "certificate_info";
+    private static final String FIELD_FINANCIAL_INFO = "financial_info";
+    private static final String FIELD_LEAVE_INFO = "leave_info";
+    private static final String FIELD_TABLES = "tables";
+    private static final String FIELD_FIELDS = "fields";
+    private static final String FIELD_COURSES = "courses";
+    private static final String FIELD_DOCUMENT_TYPE = "document_type";
+    private static final String FIELD_TEXT = "text";
+    private static final String FIELD_SUMMARY = "summary";
+    private static final String FIELD_CONFIDENCE = "confidence_overall";
+    private static final String FIELD_NAME = "name";
+    private static final String FIELD_STUDENT_ID = "student_id";
+    private static final String FIELD_ID_NUMBER = "id_number";
+    private static final String FIELD_COURSE = "course";
+    private static final String FIELD_COURSE_NAME = "course_name";
+    private static final String FIELD_SCORE = "score";
+    private static final String FIELD_GRADE = "grade";
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void saveAiResult(Long fileId, JsonNode aiResult, String fileUrl) {
+        try {
+            DocumentExtractMain extractMain = buildExtractMain(fileId, aiResult, fileUrl);
+            extractMainMapper.insert(extractMain);
+            saveCourseDetails(fileId, extractMain.getId(), aiResult);
+            log.info("AI结果保存完成: fileId={}", fileId);
+        } catch (Exception e) {
+            log.error("保存AI结果失败: fileId={}", fileId, e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "保存AI结果失败");
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateFileStatus(Long fileId, Integer processStatus, String failReason) {
+        DocumentFile file = fileMapper.selectById(fileId);
+        if (file == null) {
+            log.warn("文件不存在，无法更新状态: fileId={}", fileId);
+            return;
+        }
+        file.setProcessStatus(processStatus);
+        if (StringUtils.hasText(failReason)) {
+            file.setFailReason(failReason);
+        }
+        fileMapper.updateById(file);
+        log.info("文件状态更新成功: fileId={}, status={}", fileId, processStatus);
+    }
+
+    /**
+     * 构建提取主表记录
+     */
+    private DocumentExtractMain buildExtractMain(Long fileId, JsonNode aiResult, String fileUrl) throws Exception {
+        DocumentExtractMain extractMain = new DocumentExtractMain();
+        extractMain.setId(idGenerator.nextId());
+        extractMain.setFileId(fileId);
+        extractMain.setDocumentType(getStringFromJson(aiResult, FIELD_DOCUMENT_TYPE));
+        extractMain.setDocumentUrl(fileUrl);
+        extractMain.setRawText(getStringFromJson(aiResult, FIELD_TEXT));
+        extractMain.setSummary(getStringFromJson(aiResult, FIELD_SUMMARY));
+        extractMain.setConfidence(getConfidenceFromJson(aiResult));
+        extractMain.setExtractResult(objectMapper.writeValueAsString(aiResult));
+        extractMain.setStatus(STATUS_PENDING);
+
+        extractBasicInfo(extractMain, aiResult);
+        extractJsonFields(extractMain, aiResult);
+
+        return extractMain;
+    }
+
+    /**
+     * 提取基本信息到主表
+     */
+    private void extractBasicInfo(DocumentExtractMain extractMain, JsonNode aiResult) {
+        if (!aiResult.has(FIELD_BASIC_INFO) || !aiResult.get(FIELD_BASIC_INFO).isObject()) {
+            return;
+        }
+        JsonNode basicInfo = aiResult.get(FIELD_BASIC_INFO);
+        String name = getStringFromJson(basicInfo, FIELD_NAME);
+        String studentId = getStringFromJson(basicInfo, FIELD_STUDENT_ID);
+        String idNumber = getStringFromJson(basicInfo, FIELD_ID_NUMBER);
+
+        if (StringUtils.hasText(name)) {
+            extractMain.setOwnerName(name);
+        }
+        if (StringUtils.hasText(studentId)) {
+            extractMain.setOwnerId(studentId);
+        } else if (StringUtils.hasText(idNumber)) {
+            extractMain.setOwnerId(idNumber);
+        }
+    }
+
+    /**
+     * 提取各类JSON字段
+     */
+    private void extractJsonFields(DocumentExtractMain extractMain, JsonNode aiResult) throws Exception {
+        if (aiResult.has(FIELD_BASIC_INFO) && aiResult.get(FIELD_BASIC_INFO).isObject()) {
+            extractMain.setBasicInfoJson(objectMapper.writeValueAsString(aiResult.get(FIELD_BASIC_INFO)));
+        }
+        if (aiResult.has(FIELD_ACADEMIC_INFO) && aiResult.get(FIELD_ACADEMIC_INFO).isObject()) {
+            extractMain.setAcademicInfoJson(objectMapper.writeValueAsString(aiResult.get(FIELD_ACADEMIC_INFO)));
+        }
+        if (aiResult.has(FIELD_CERTIFICATE_INFO) && aiResult.get(FIELD_CERTIFICATE_INFO).isObject()) {
+            extractMain.setCertificateInfoJson(objectMapper.writeValueAsString(aiResult.get(FIELD_CERTIFICATE_INFO)));
+        }
+        if (aiResult.has(FIELD_FINANCIAL_INFO) && aiResult.get(FIELD_FINANCIAL_INFO).isObject()) {
+            extractMain.setFinancialInfoJson(objectMapper.writeValueAsString(aiResult.get(FIELD_FINANCIAL_INFO)));
+        }
+        if (aiResult.has(FIELD_LEAVE_INFO) && aiResult.get(FIELD_LEAVE_INFO).isObject()) {
+            extractMain.setLeaveInfoJson(objectMapper.writeValueAsString(aiResult.get(FIELD_LEAVE_INFO)));
+        }
+        if (aiResult.has(FIELD_TABLES) && aiResult.get(FIELD_TABLES).isArray()) {
+            extractMain.setTablesJson(objectMapper.writeValueAsString(aiResult.get(FIELD_TABLES)));
+        }
+        if (aiResult.has(FIELD_FIELDS) && aiResult.get(FIELD_FIELDS).isObject()) {
+            extractMain.setKvDataJson(objectMapper.writeValueAsString(aiResult.get(FIELD_FIELDS)));
+        }
+    }
+
+    /**
+     * 保存课程详情
+     */
+    private void saveCourseDetails(Long fileId, Long mainId, JsonNode aiResult) {
+        if (!aiResult.has(FIELD_COURSES) || !aiResult.get(FIELD_COURSES).isArray()) {
+            return;
+        }
+        JsonNode courses = aiResult.get(FIELD_COURSES);
+        int rowIndex = 0;
+        for (JsonNode course : courses) {
+            DocumentExtractDetail detail = new DocumentExtractDetail();
+            detail.setId(idGenerator.nextId());
+            detail.setFileId(fileId);
+            detail.setMainId(mainId);
+            detail.setRowIndex(rowIndex++);
+            detail.setRowDataJson(course.toString());
+            detail.setIsVerified(STATUS_UNVERIFIED);
+
+            if (course.has(FIELD_COURSE)) {
+                detail.setFieldName(course.get(FIELD_COURSE).asText());
+            } else if (course.has(FIELD_COURSE_NAME)) {
+                detail.setFieldName(course.get(FIELD_COURSE_NAME).asText());
+            }
+            if (course.has(FIELD_SCORE)) {
+                detail.setFieldValue(course.get(FIELD_SCORE).asText());
+            } else if (course.has(FIELD_GRADE)) {
+                detail.setFieldValue(course.get(FIELD_GRADE).asText());
+            }
+
+            extractDetailMapper.insert(detail);
+        }
+    }
+
+    private String getStringFromJson(JsonNode node, String field) {
+        if (node == null || !node.has(field) || node.get(field).isNull()) {
+            return null;
+        }
+        return node.get(field).asText();
+    }
+
+    private Double getConfidenceFromJson(JsonNode aiResult) {
+        if (aiResult.has(FIELD_CONFIDENCE) && !aiResult.get(FIELD_CONFIDENCE).isNull()) {
+            return aiResult.get(FIELD_CONFIDENCE).asDouble();
+        }
+        return null;
+    }
+}
+

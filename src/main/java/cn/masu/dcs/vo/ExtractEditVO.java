@@ -2,6 +2,7 @@ package cn.masu.dcs.vo;
 
 import lombok.Data;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.List;
 
@@ -18,7 +19,7 @@ import java.util.List;
 @Data
 public class ExtractEditVO implements Serializable {
 
-    @java.io.Serial
+    @Serial
     private static final long serialVersionUID = 1L;
 
     /**

@@ -3,7 +3,7 @@ package cn.masu.dcs.service.impl;
 import cn.masu.dcs.common.client.AIServiceClient;
 import cn.masu.dcs.common.client.AIServiceClient.DocumentComplexity;
 import cn.masu.dcs.common.client.AIServiceClient.DocumentProcessResult;
-import cn.masu.dcs.common.config.GlobalExceptionHandler.BusinessException;
+import cn.masu.dcs.common.exception.BusinessException;
 import cn.masu.dcs.common.result.ErrorCode;
 import cn.masu.dcs.entity.DocumentFile;
 import cn.masu.dcs.mapper.DocumentFileMapper;

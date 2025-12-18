@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://119.45.164.129:3306/dcs?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&autoReconnect=true&failOverReadOnly=false&maxReconnects=10
+    username: root
+    password: newpassword
+  data:
+    redis:
+      host: 119.45.164.129
+      port: 6379
+      password: prodStrongPass
+      database: 3
+      timeout: 3000ms
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+logging:
+  level:
+    cn.masu.dcs: info
+    com.baomidou.mybatisplus: warn
+

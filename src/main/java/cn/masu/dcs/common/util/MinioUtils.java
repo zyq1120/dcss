@@ -1,6 +1,6 @@
 package cn.masu.dcs.common.util;
 
-import cn.masu.dcs.common.config.GlobalExceptionHandler.BusinessException;
+import cn.masu.dcs.common.exception.BusinessException;
 import cn.masu.dcs.common.result.ErrorCode;
 import io.minio.*;
 import io.minio.http.Method;
@@ -364,4 +364,3 @@ public class MinioUtils {
         }
     }
 }
-

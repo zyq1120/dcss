@@ -1,6 +1,6 @@
 package cn.masu.dcs.service.impl;
 
-import cn.masu.dcs.common.config.GlobalExceptionHandler.BusinessException;
+import cn.masu.dcs.common.exception.BusinessException;
 import cn.masu.dcs.common.result.ErrorCode;
 import cn.masu.dcs.common.result.PageResult;
 import cn.masu.dcs.common.util.SnowflakeIdGenerator;
@@ -137,3 +137,4 @@ public class TemplateServiceImpl extends ServiceImpl<SysDocTemplateMapper, SysDo
         return vo;
     }
 }
+

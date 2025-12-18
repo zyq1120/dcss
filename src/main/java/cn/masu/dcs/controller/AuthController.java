@@ -1,6 +1,6 @@
 package cn.masu.dcs.controller;
 
-import cn.masu.dcs.common.config.GlobalExceptionHandler.BusinessException;
+import cn.masu.dcs.common.exception.BusinessException;
 import cn.masu.dcs.common.result.ErrorCode;
 import cn.masu.dcs.common.result.R;
 import cn.masu.dcs.dto.LoginRequest;

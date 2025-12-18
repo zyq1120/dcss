@@ -1,8 +1,7 @@
-package cn.masu.dcs.common.config;
+package cn.masu.dcs.common.exception;
 
 import cn.masu.dcs.common.result.ErrorCode;
 import cn.masu.dcs.common.result.R;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -150,75 +149,4 @@ public class GlobalExceptionHandler {
         log.error("系统异常: {}", e.getMessage(), e);
         return R.fail(ErrorCode.SYSTEM_ERROR.getCode(), "系统繁忙，请稍后重试");
     }
-
-    /**
-     * 自定义业务异常类
-     * <p>
-     * 用于在业务逻辑中抛出带有错误码的异常
-     * </p>
-     * <p>
-     * 使用示例：
-     * <pre>
-     * // 使用ErrorCode枚举
-     * throw new BusinessException(ErrorCode.USER_NOT_FOUND);
-     *
-     * // 使用自定义错误码和消息
-     * throw new BusinessException(40001, "用户不存在");
-     *
-     * // 使用ErrorCode但覆盖消息
-     * throw new BusinessException(ErrorCode.PARAM_ERROR, "用户名不能为空");
-     * </pre>
-     */
-    @Getter
-    public static class BusinessException extends RuntimeException {
-
-        @java.io.Serial
-        private static final long serialVersionUID = 1L;
-
-        /**
-         * 错误码
-         */
-        private final Integer code;
-
-        /**
-         * 错误消息
-         */
-        private final String message;
-
-        /**
-         * 使用ErrorCode枚举构造异常
-         *
-         * @param errorCode 错误码枚举
-         */
-        public BusinessException(ErrorCode errorCode) {
-            super(errorCode.getMessage());
-            this.code = errorCode.getCode();
-            this.message = errorCode.getMessage();
-        }
-
-        /**
-         * 使用自定义错误码和消息构造异常
-         *
-         * @param code    错误码
-         * @param message 错误消息
-         */
-        public BusinessException(Integer code, String message) {
-            super(message);
-            this.code = code;
-            this.message = message;
-        }
-
-        /**
-         * 使用ErrorCode枚举但覆盖错误消息
-         *
-         * @param errorCode    错误码枚举
-         * @param errorMessage 自定义错误消息
-         */
-        public BusinessException(ErrorCode errorCode, String errorMessage) {
-            super(errorMessage);
-            this.code = errorCode.getCode();
-            this.message = errorMessage;
-        }
-    }
 }
-

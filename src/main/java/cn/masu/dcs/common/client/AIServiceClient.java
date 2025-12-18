@@ -1,12 +1,14 @@
 package cn.masu.dcs.common.client;
 
+import cn.masu.dcs.common.config.AiServiceProperties;
+import cn.masu.dcs.common.exception.BusinessException;
+import cn.masu.dcs.common.result.ErrorCode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Builder;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -14,7 +16,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
@@ -49,23 +50,12 @@ public class AIServiceClient {
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
-    @Value("${ai.service.base-url:http://localhost:5000}")
-    private String baseUrl;
-
-    @Value("${ai.service.enable-llm-fallback:true}")
-    private boolean enableLLMFallback;
-
-    @Value("${ai.service.daily-budget:20.0}")
-    private double dailyBudget;
-
-    @Value("${ai.service.ocr-confidence-threshold:0.7}")
-    private double ocrConfidenceThreshold;
-
-    @Value("${ai.service.nlp-confidence-threshold:0.75}")
-    private double nlpConfidenceThreshold;
-
-    @Value("${ai.service.llm-model:qwen-vl}")
-    private String defaultLLMModel;
+    private final String baseUrl;
+    private final boolean enableLLMFallback;
+    private final double dailyBudget;
+    private final double ocrConfidenceThreshold;
+    private final double nlpConfidenceThreshold;
+    private final String defaultLLMModel;
 
     /**
      * 当前累计成本
@@ -75,7 +65,13 @@ public class AIServiceClient {
     /**
      * 默认构造函数
      */
-    public AIServiceClient() {
+    public AIServiceClient(AiServiceProperties properties) {
+        this.baseUrl = properties.getBaseUrl();
+        this.enableLLMFallback = properties.isEnableLlmFallback();
+        this.dailyBudget = properties.getDailyBudget();
+        this.ocrConfidenceThreshold = properties.getOcrConfidenceThreshold();
+        this.nlpConfidenceThreshold = properties.getNlpConfidenceThreshold();
+        this.defaultLLMModel = properties.getLlmModel();
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
         this.okHttpClient = new OkHttpClient.Builder()
@@ -115,7 +111,7 @@ public class AIServiceClient {
 
                 if (!response.isSuccessful() || response.body() == null) {
                     log.error("AI服务HTTP错误: code={}, duration={}ms", response.code(), duration);
-                    throw new RuntimeException("AI service HTTP error: " + response.code());
+                    throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "AI服务HTTP错误:" + response.code());
                 }
 
                 String body = response.body().string();
@@ -128,7 +124,7 @@ public class AIServiceClient {
                         ? root.get("detail").asText()
                         : null;
                     log.error("AI服务业务错误: code={}, message={}, detail={}", code, message, detail);
-                    throw new RuntimeException(message + (detail != null ? (": " + detail) : ""));
+                    throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), message + (detail != null ? (": " + detail) : ""));
                 }
 
                 JsonNode data = root.get("data");
@@ -144,7 +140,6 @@ public class AIServiceClient {
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
             log.error("AI处理请求失败, 耗时: {}ms", duration, e);
-
             return AIProcessResponse.builder()
                 .success(false)
                 .errorMessage(e.getMessage())
@@ -165,7 +160,7 @@ public class AIServiceClient {
     public JsonNode processUnifiedAiLegacy(Object requestBody) {
         AIProcessResponse response = processUnifiedAi(requestBody);
         if (!response.getSuccess()) {
-            throw new RuntimeException(response.getErrorMessage());
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), response.getErrorMessage());
         }
         return response.getData();
     }
@@ -194,11 +189,11 @@ public class AIServiceClient {
             }
 
             log.error("OCR请求失败: status={}", response.getStatusCode());
-            throw new RuntimeException("OCR request failed");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "OCR请求失败");
 
         } catch (Exception e) {
             log.error("OCR请求异常: fileId={}", fileId, e);
-            throw new RuntimeException("OCR request failed", e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "OCR请求失败", e);
         }
     }
 
@@ -225,11 +220,11 @@ public class AIServiceClient {
                 return parseOCRResponse(responseData);
             }
 
-            throw new RuntimeException("OCR request failed");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "OCR请求失败");
 
         } catch (Exception e) {
             log.error("OCR请求失败", e);
-            throw new RuntimeException("OCR request failed", e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "OCR请求失败", e);
         }
     }
 
@@ -244,7 +239,7 @@ public class AIServiceClient {
     public NLPResponse extractFieldsWithFallback(String ocrText, Long fileId, Map<String, Object> templateConfig) {
         String url = baseUrl + "/api/v1/nlp/extract-with-llm";
 
-        Map<String, Object> request = new HashMap<>();
+        Map<String, Object> request = new HashMap<>(8);
         request.put("file_id", fileId);
         request.put("ocr_text", ocrText);
         request.put("template_config", templateConfig);
@@ -263,11 +258,11 @@ public class AIServiceClient {
                 return parseNLPResponse(responseData);
             }
 
-            throw new RuntimeException("NLP extraction failed");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "NLP提取失败");
 
         } catch (Exception e) {
             log.error("NLP提取失败: fileId={}", fileId, e);
-            throw new RuntimeException("NLP extraction failed", e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "NLP提取失败", e);
         }
     }
 
@@ -282,7 +277,7 @@ public class AIServiceClient {
     public NLPResponse extractFields(String ocrText, Long fileId, Map<String, Object> templateConfig) {
         String url = baseUrl + "/api/v1/nlp/extract";
 
-        Map<String, Object> request = new HashMap<>();
+        Map<String, Object> request = new HashMap<>(8);
         request.put("file_id", fileId);
         request.put("ocr_text", ocrText);
         request.put("template_config", templateConfig);
@@ -299,11 +294,11 @@ public class AIServiceClient {
                 return parseNLPResponse(responseData);
             }
 
-            throw new RuntimeException("NLP extraction failed");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "NLP提取失败");
 
         } catch (Exception e) {
             log.error("NLP提取失败", e);
-            throw new RuntimeException("NLP extraction failed", e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "NLP提取失败", e);
         }
     }
 
@@ -319,12 +314,12 @@ public class AIServiceClient {
         // 检查预算
         if (currentCost >= dailyBudget) {
             log.warn("已达到每日预算上限(¥{}), 拒绝使用LLM", dailyBudget);
-            throw new RuntimeException("Daily budget exceeded");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "当天预算已用尽");
         }
 
         String url = baseUrl + "/api/v1/llm/process-image";
 
-        Map<String, Object> request = new HashMap<>();
+        Map<String, Object> request = new HashMap<>(8);
         request.put("file_path", imagePath);
         request.put("file_id", fileId);
         request.put("template_config", templateConfig);
@@ -351,11 +346,11 @@ public class AIServiceClient {
                 return nlpResponse;
             }
 
-            throw new RuntimeException("Multimodal LLM processing failed");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "多模态LLM处理失败");
 
         } catch (Exception e) {
             log.error("多模态LLM处理失败", e);
-            throw new RuntimeException("Multimodal LLM processing failed", e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "多模态LLM处理失败", e);
         }
     }
 
@@ -368,7 +363,7 @@ public class AIServiceClient {
     public ClassificationResponse classifyDocument(String text) {
         String url = baseUrl + "/api/v1/nlp/classify";
 
-        Map<String, Object> request = new HashMap<>();
+        Map<String, Object> request = new HashMap<>(8);
         request.put("text", text);
         request.put("candidates", new String[]{"成绩单", "请假条", "证明文件", "合同"});
 
@@ -384,11 +379,11 @@ public class AIServiceClient {
                 return parseClassificationResponse(responseData);
             }
 
-            throw new RuntimeException("Document classification failed");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "文档分类失败");
 
         } catch (Exception e) {
             log.error("文档分类失败", e);
-            throw new RuntimeException("Document classification failed", e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "文档分类失败", e);
         }
     }
 
@@ -483,7 +478,7 @@ public class AIServiceClient {
      * 构建OCR请求
      */
     private Map<String, Object> buildOCRRequest(String filePath, Long fileId, boolean useLLM) {
-        Map<String, Object> request = new HashMap<>();
+        Map<String, Object> request = new HashMap<>(8);
         request.put("file_path", filePath);
         request.put("file_id", fileId);
 
@@ -492,7 +487,7 @@ public class AIServiceClient {
             request.put("fallback_threshold", ocrConfidenceThreshold);
         }
 
-        Map<String, Object> options = new HashMap<>();
+        Map<String, Object> options = new HashMap<>(8);
         options.put("language", "ch_en");
         options.put("enhance_image", true);
         options.put("detect_table", true);
@@ -514,7 +509,7 @@ public class AIServiceClient {
     /**
      * 解析OCR响应
      */
-    private OCRResponse parseOCRResponse(JsonNode responseData) throws IOException {
+    private OCRResponse parseOCRResponse(JsonNode responseData) {
         JsonNode data = responseData.get("data");
 
         OCRResponse response = new OCRResponse();
@@ -552,7 +547,7 @@ public class AIServiceClient {
     /**
      * 解析NLP响应
      */
-    private NLPResponse parseNLPResponse(JsonNode responseData) throws IOException {
+    private NLPResponse parseNLPResponse(JsonNode responseData) {
         JsonNode data = responseData.get("data");
 
         NLPResponse response = new NLPResponse();
@@ -589,7 +584,7 @@ public class AIServiceClient {
     /**
      * 解析分类响应
      */
-    private ClassificationResponse parseClassificationResponse(JsonNode responseData) throws IOException {
+    private ClassificationResponse parseClassificationResponse(JsonNode responseData) {
         JsonNode data = responseData.get("data");
 
         ClassificationResponse response = new ClassificationResponse();
@@ -718,4 +713,3 @@ public class AIServiceClient {
         COMPLEX
     }
 }
-

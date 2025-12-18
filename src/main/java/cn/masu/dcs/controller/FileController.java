@@ -61,10 +61,18 @@ public class FileController {
         FileDetailVO fileDetail = fileService.getFileDetail(id);
         byte[] fileContent = fileService.downloadFile(id);
 
+        String encodedFileName;
+        try {
+            encodedFileName = java.net.URLEncoder.encode(fileDetail.getFileName(),
+                java.nio.charset.StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+        } catch (Exception e) {
+            encodedFileName = fileDetail.getFileName();
+        }
+
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + fileDetail.getFileName() + "\"")
+                        "attachment; filename*=UTF-8''" + encodedFileName)
                 .body(fileContent);
     }
 

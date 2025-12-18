@@ -229,7 +229,9 @@
                     <h2>👁️ 文件预览</h2>
                     <button class="btn btn-primary" onclick="loadFilePreview()">加载预览</button>
                     <div style="margin-top: 15px;">
-                        <iframe id="previewFrame" class="preview-frame"></iframe>
+                        <div id="previewContainer">
+                            <iframe id="previewFrame" class="preview-frame"></iframe>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -239,7 +241,10 @@
                 <!-- AI处理结果 -->
                 <div class="section">
                     <h2>🤖 AI处理结果</h2>
-                    <button class="btn btn-primary" onclick="loadProcessResult()">加载AI结果</button>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button class="btn btn-primary" onclick="loadProcessResult()" style="flex:1">加载AI结果</button>
+                        <button class="btn btn-secondary" onclick="loadReviewDetail()" style="flex:1">加载校对详情</button>
+                    </div>
                     <div style="margin-top: 15px;">
                         <div id="resultInfo" style="margin-bottom: 10px;"></div>
                         <div id="resultBox" class="result-box"></div>
@@ -261,11 +266,24 @@
 
     <script>
         let currentData = null;
+        let lastReviewDetailData = null;
+
+        // 获取请求头（自动处理Bearer前缀）
+        function getAuthHeaders() {
+            const token = document.getElementById('token').value;
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (token) {
+                // 如果token已经包含Bearer前缀，直接使用；否则添加
+                headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+            }
+            return headers;
+        }
 
         // 加载文件预览
         async function loadFilePreview() {
             const baseUrl = document.getElementById('baseUrl').value;
-            const token = document.getElementById('token').value;
             const fileId = document.getElementById('fileId').value;
 
             if (!fileId) {
@@ -275,14 +293,45 @@
 
             try {
                 const response = await fetch(`${baseUrl}/api/audit/preview/${fileId}`, {
-                    headers: {
-                        'Authorization': token
-                    }
+                    headers: getAuthHeaders()
                 });
 
                 const result = await response.json();
                 if (result.code === 200) {
-                    document.getElementById('previewFrame').src = result.data;
+                    const previewUrl = result.data;
+                    const previewContainer = document.getElementById('previewContainer');
+
+                    // 检查文件类型
+                    const isPdf = previewUrl.toLowerCase().includes('.pdf');
+                    const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)/i.test(previewUrl);
+
+                    if (isPdf) {
+                        // PDF预览：使用iframe直接嵌入，如果失败提供下载链接
+                        // 注意：MinIO预签名URL自带认证，可以直接在iframe中使用
+                        previewContainer.innerHTML = `
+                            <div style="display:flex;flex-direction:column;gap:10px;">
+                                <div style="display:flex;gap:10px;margin-bottom:10px;">
+                                    <a href="${previewUrl}" target="_blank" class="btn btn-primary" style="text-decoration:none;padding:8px 16px;">
+                                        🔗 新窗口打开PDF
+                                    </a>
+                                    <a href="${previewUrl}" download class="btn btn-secondary" style="text-decoration:none;padding:8px 16px;">
+                                        📥 下载PDF
+                                    </a>
+                                </div>
+                                <iframe src="${previewUrl}" class="preview-frame" style="width:100%;height:500px;border:1px solid #ddd;border-radius:6px;"></iframe>
+                            </div>
+                        `;
+                    } else if (isImage) {
+                        // 图片直接显示
+                        previewContainer.innerHTML = `
+                            <img src="${previewUrl}" class="preview-frame" style="width:100%;height:auto;max-height:500px;object-fit:contain;" alt="文件预览">
+                        `;
+                    } else {
+                        // 其他文件类型尝试用iframe
+                        previewContainer.innerHTML = `
+                            <iframe src="${previewUrl}" class="preview-frame" style="width:100%;height:500px;"></iframe>
+                        `;
+                    }
                     showToast('预览加载成功', 'success');
                 } else {
                     showToast('加载失败: ' + result.message, 'error');
@@ -295,7 +344,6 @@
         // 加载AI处理结果
         async function loadProcessResult() {
             const baseUrl = document.getElementById('baseUrl').value;
-            const token = document.getElementById('token').value;
             const fileId = document.getElementById('fileId').value;
 
             if (!fileId) {
@@ -305,14 +353,20 @@
 
             try {
                 const response = await fetch(`${baseUrl}/api/audit/result/${fileId}`, {
-                    headers: {
-                        'Authorization': token
-                    }
+                    headers: getAuthHeaders()
                 });
 
                 const result = await response.json();
                 if (result.code === 200) {
                     currentData = result.data;
+
+                    // 检查是否需要先进行AI处理
+                    if (result.data.needProcess === true || result.data.status === -1) {
+                        displayNoProcessResult(result.data);
+                        showToast('该文件尚未进行AI处理', 'warning');
+                        return;
+                    }
+
                     displayResult(result.data);
                     loadFieldsToEditor(result.data.kvData || {});
                     showToast('结果加载成功', 'success');
@@ -324,15 +378,86 @@
             }
         }
 
-        // 显示结果
-        function displayResult(data) {
+        // 获取校对详情（通过 /api/review/{fileId}/detail）
+        async function loadReviewDetail() {
+            const baseUrl = document.getElementById('baseUrl').value;
+            const fileId = document.getElementById('fileId').value;
+
+            if (!fileId) {
+                alert('请输入文件ID');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseUrl}/api/review/${fileId}/detail`, {
+                    headers: getAuthHeaders()
+                });
+
+                const result = await response.json();
+                if (result.code === 200) {
+                    lastReviewDetailData = result.data;
+                    displayReviewDetail(result.data);
+                    showToast('校对详情加载成功', 'success');
+                } else {
+                    showToast('加载失败: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showToast('请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 显示校对详情
+        function displayReviewDetail(data) {
+            const confidence = data.confidence != null ? data.confidence : 0;
+            const fields = data.fields || [];
+
+            const infoHtml = `
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <span class="status-badge status-success">置信度: ${(confidence * 100).toFixed(2)}%</span>
+                    <span class="status-badge status-success">文档类型: ${data.documentType || '未知'}</span>
+                    <span class="status-badge status-success">字段数: ${fields.length}</span>
+                </div>
+            `;
+            document.getElementById('resultInfo').innerHTML = infoHtml;
+            document.getElementById('resultBox').textContent = JSON.stringify(data, null, 2);
+
+            // 加载字段到编辑器
+            const fieldList = document.getElementById('fieldList');
+            fieldList.innerHTML = '';
+            fields.forEach(field => {
+                addFieldRow(field.fieldName || '', field.fieldValue || '');
+            });
+        }
+
+        // 显示未处理文件的提示
+        function displayNoProcessResult(data) {
             const infoHtml = `
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <span class="status-badge status-success">置信度: ${(data.confidence * 100).toFixed(2)}%</span>
-                    <span class="status-badge ${data.status === 0 ? 'status-warning' : 'status-success'}">
-                        状态: ${getStatusName(data.status)}
+                    <span class="status-badge status-warning">状态: 未处理</span>
+                    <span class="status-badge status-error">需要AI处理</span>
+                </div>
+                <div style="margin-top: 15px; padding: 15px; background: #fff3cd; border-radius: 6px; color: #856404;">
+                    <strong>⚠️ 提示：</strong>${data.message || '该文件尚未进行AI处理，请先触发AI处理后再进行校对。'}
+                </div>
+            `;
+            document.getElementById('resultInfo').innerHTML = infoHtml;
+            document.getElementById('resultBox').textContent = JSON.stringify(data, null, 2);
+            document.getElementById('fieldList').innerHTML = '<p style="color: #999;">暂无可编辑的字段</p>';
+        }
+
+        // 显示结果
+        function displayResult(data) {
+            const confidence = data.confidence != null ? data.confidence : 0;
+            const kvData = data.kvData || {};
+            const status = data.status != null ? data.status : -1;
+
+            const infoHtml = `
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <span class="status-badge status-success">置信度: ${(confidence * 100).toFixed(2)}%</span>
+                    <span class="status-badge ${status === 0 ? 'status-warning' : 'status-success'}">
+                        状态: ${getStatusName(status)}
                     </span>
-                    <span class="status-badge status-success">字段数: ${Object.keys(data.kvData || {}).length}</span>
+                    <span class="status-badge status-success">字段数: ${Object.keys(kvData).length}</span>
                 </div>
             `;
             document.getElementById('resultInfo').innerHTML = infoHtml;
@@ -374,7 +499,6 @@
         // 保存字段
         async function saveFields() {
             const baseUrl = document.getElementById('baseUrl').value;
-            const token = document.getElementById('token').value;
             const fileId = document.getElementById('fileId').value;
 
             if (!fileId) {
@@ -400,10 +524,7 @@
             try {
                 const response = await fetch(`${baseUrl}/api/audit/modify/${fileId}`, {
                     method: 'POST',
-                    headers: {
-                        'Authorization': token,
-                        'Content-Type': 'application/json'
-                    },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify(fields)
                 });
 
@@ -423,6 +544,7 @@
         // 获取状态名称
         function getStatusName(status) {
             const statusMap = {
+                '-1': '未处理',
                 0: '待校对',
                 1: '已校对',
                 2: '已确认'
@@ -432,13 +554,20 @@
 
         // 显示提示
         function showToast(message, type) {
+            let bgColor = '#10b981'; // success - green
+            if (type === 'error') {
+                bgColor = '#ef4444'; // red
+            } else if (type === 'warning') {
+                bgColor = '#f59e0b'; // amber
+            }
+
             const toast = document.createElement('div');
             toast.style.cssText = `
                 position: fixed;
                 top: 20px;
                 right: 20px;
                 padding: 15px 20px;
-                background: ${type === 'success' ? '#10b981' : '#ef4444'};
+                background: ${bgColor};
                 color: white;
                 border-radius: 8px;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.2);

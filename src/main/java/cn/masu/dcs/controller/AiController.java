@@ -1,6 +1,6 @@
 package cn.masu.dcs.controller;
 
-import cn.masu.dcs.common.config.GlobalExceptionHandler.BusinessException;
+import cn.masu.dcs.common.exception.BusinessException;
 import cn.masu.dcs.common.result.ErrorCode;
 import cn.masu.dcs.common.result.R;
 import cn.masu.dcs.dto.AiProcessRequest;
@@ -73,7 +73,7 @@ public class AiController {
      * 重新解析文件
      *
      * @param fileId     文件ID
-     * @param templateId 模��ID
+     * @param templateId 模板ID
      * @return AI解析结果
      */
     @PostMapping("/reprocess/{fileId}")
@@ -166,4 +166,3 @@ public class AiController {
         return null;
     }
 }
-

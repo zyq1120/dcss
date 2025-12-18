@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>审核保存修改测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        label { display: block; margin-top: 12px; }
+        input, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { margin-top: 20px; padding: 10px 16px; }
+        pre { background: #f5f5f5; padding: 12px; white-space: pre-wrap; }
+        .flex-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .flex-row > div { flex: 1; min-width: 220px; }
+    </style>
+</head>
+<body>
+<h2>审核保存修改接口测试</h2>
+<p>快速验证 <code>POST /api/audit/modify/{fileId}</code> 接口。填写参数后点击“发送请求”即可查看响应与当前提取数据。</p>
+<button onclick="fillSampleData()">一键填充示例数据</button>
+<button onclick="clearAll()">清空内容</button>
+
+<div class="flex-row">
+    <div>
+        <label>后端地址（默认 http://localhost:8080）</label>
+        <input id="baseUrl" value="http://localhost:8080">
+    </div>
+    <div>
+        <label>文件 ID</label>
+        <input id="fileId" placeholder="例如：1234567890">
+    </div>
+</div>
+
+<h3>账号快速登录（可选）</h3>
+<div class="flex-row">
+    <div>
+        <label>用户名</label>
+        <input id="username" value="admin">
+    </div>
+    <div>
+        <label>密码</label>
+        <input id="password" type="password" value="admin123">
+    </div>
+</div>
+<button onclick="loginAndFillToken()">登录并填充 Token</button>
+<pre id="loginResponse"></pre>
+
+<label>Bearer Token</label>
+<textarea id="token" rows="2" placeholder="可选，如需鉴权请填写"></textarea>
+
+<label>修改字段 JSON</label>
+<textarea id="payload" rows="12"></textarea>
+
+<button onclick="sendRequest()">发送请求</button>
+
+<h3>接口响应</h3>
+<pre id="response"></pre>
+
+<h3>最新提取结果（extract_result）</h3>
+<pre id="extract"></pre>
+
+<script>
+const sampleToken = 'Bearer eyJhbGciOiJIUzM4NCJ9.eyJ1c2VySWQiOjc4NTA3OTU0NjMyNzA3Mjc2OCwidG9rZW5WZXJzaW9uIjo2LCJ1c2VybmFtZSI6ImFkbWluIiwic3ViIjoiYWRtaW4iLCJpYXQiOjE3NjU3NjI2MTEsImV4cCI6MTc2NTg0OTAxMX0.GKtE_HsvjydOe_nhRSQUvkxqhBTwgHtQISKb-p3Z5njVh0lcEkBD3g4BpDDNQsWd';
+const samplePayload = `{
+  "code": 200,
+  "message": "获取处理结果成功",
+  "data": {
+    "kvData": {
+      "processing_time": 27.38,
+      "extract_main": "{\"confidence\":0.9054,\"status\":\"partial\"}",
+      "template_id": "auto-generated-from-doc",
+      "extract_details": "[{\"confidence\":0.99,\"field_name\":\"name\",\"field_type\":\"PERSON\",\"field_value\":\"周宇清\",\"status\":\"ok\"},{\"confidence\":0.0,\"field_name\":\"id_number\",\"field_type\":\"ID_NUMBER\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.9,\"field_name\":\"student_id\",\"field_type\":\"STUDENT_ID\",\"field_value\":\"242040390\",\"status\":\"ok\"},{\"confidence\":0.0,\"field_name\":\"address\",\"field_type\":\"ADDRESS\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.8,\"field_name\":\"issuer\",\"field_type\":\"ORG\",\"field_value\":\"所属学校\",\"status\":\"ok\"},{\"confidence\":0.8,\"field_name\":\"admission_school\",\"field_type\":\"ORG\",\"field_value\":\"所属学校\",\"status\":\"ok\"},{\"confidence\":0.0,\"field_name\":\"date\",\"field_type\":\"DATE\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.0,\"field_name\":\"reason\",\"field_type\":\"TEXT\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.9,\"field_name\":\"certificate_id\",\"field_type\":\"CERT_ID\",\"field_value\":\"340801252117128\",\"status\":\"ok\"},{\"confidence\":0.9,\"field_name\":\"class\",\"field_type\":\"CLASS\",\"field_value\":\"所属学校：\",\"status\":\"ok\"},{\"confidence\":0.8,\"field_name\":\"contact\",\"field_type\":\"PERSON\",\"field_value\":\"周宇清\",\"status\":\"ok\"},{\"confidence\":0.0,\"field_name\":\"phone\",\"field_type\":\"PHONE\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.0,\"field_name\":\"gender\",\"field_type\":\"TEXT\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.0,\"field_name\":\"birth_date\",\"field_type\":\"DATE\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.99,\"field_name\":\"school_name\",\"field_type\":\"ORG\",\"field_value\":\"大数据与人I智能学院\",\"status\":\"ok\"},{\"confidence\":0.0,\"field_name\":\"major\",\"field_type\":\"TEXT\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.0,\"field_name\":\"degree_level\",\"field_type\":\"TEXT\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.0,\"field_name\":\"education_type\",\"field_type\":\"TEXT\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.0,\"field_name\":\"study_mode\",\"field_type\":\"TEXT\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.97,\"field_name\":\"college\",\"field_type\":\"ORG\",\"field_value\":\"软升243\",\"status\":\"ok\"},{\"confidence\":0.97,\"field_name\":\"department\",\"field_type\":\"ORG\",\"field_value\":\"班级：\",\"status\":\"ok\"},{\"confidence\":0.0,\"field_name\":\"enroll_date\",\"field_type\":\"DATE\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.0,\"field_name\":\"status\",\"field_type\":\"TEXT\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.0,\"field_name\":\"expected_grad_date\",\"field_type\":\"DATE\",\"field_value\":null,\"status\":\"missing\"},{\"confidence\":0.95,\"field_name\":\"verify_code\",\"field_type\":\"TEXT\",\"field_value\":\"340801252117128\",\"status\":\"ok\"},{\"confidence\":0.0,\"field_name\":\"verify_url\",\"field_type\":\"TEXT\",\"field_value\":null,\"status\":\"missing\"}]"
+    },
+    "extractId": "786510708639531008",
+    "createTime": "2025-12-10T08:32:46",
+    "confidence": 0.9054,
+    "extractResult": {
+      "summary": "类型 通知，姓名 周宇清，学校 大数据与人I智能学院，学院 软升243",
+      "courses": [],
+      "basic_info": {
+        "class": "所属学校：马鞍山学院",
+        "college": "软升243",
+        "id_number": "341321200211201034",
+        "name": "周宇清",
+        "school_name": "大数据与人I智能学院",
+        "student_id": "242040390"
+      },
+      "leave_info": {},
+      "financial_info": {},
+      "confidence_overall": 0.9054,
+      "certificate_info": {
+        "certificate_id": "340801252117128",
+        "verify_code": "340801252117128"
+      },
+      "tables": [],
+      "text": "身份信息 场成23 考生须 时间安排 ...",
+      "academic_info": {},
+      "fields": {}
+    },
+    "fileId": "786510591282905088",
+    "status": 0
+  }
+}`;
+
+function fillSampleData() {
+    document.getElementById('baseUrl').value = 'http://localhost:8080';
+    document.getElementById('fileId').value = '786510591282905088';
+    document.getElementById('token').value = sampleToken;
+    document.getElementById('payload').value = samplePayload;
+}
+
+function clearAll() {
+    document.getElementById('fileId').value = '';
+    document.getElementById('token').value = '';
+    document.getElementById('payload').value = '';
+    document.getElementById('response').textContent = '';
+    document.getElementById('extract').textContent = '';
+    document.getElementById('loginResponse').textContent = '';
+}
+
+async function loginAndFillToken() {
+    const baseUrl = document.getElementById('baseUrl').value.trim().replace(/\/$/, '');
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const loginRespEl = document.getElementById('loginResponse');
+
+    if (!username || !password) {
+        alert('用户名和密码不能为空');
+        return;
+    }
+
+    try {
+        const res = await fetch(`${baseUrl}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const bodyText = await formatResponseText(res);
+        loginRespEl.textContent = bodyText;
+        if (res.ok) {
+            try {
+                const parsed = JSON.parse(bodyText);
+                if (parsed?.data?.token) {
+                    document.getElementById('token').value = `Bearer ${parsed.data.token}`;
+                }
+            } catch (err) {
+                // 忽略解析失败
+            }
+        }
+    } catch (err) {
+        loginRespEl.textContent = '登录失败: ' + err.message;
+    }
+}
+
+async function sendRequest() {
+    const baseUrl = document.getElementById('baseUrl').value.trim().replace(/\/$/, '');
+    const fileId = document.getElementById('fileId').value.trim();
+    const token = document.getElementById('token').value.trim();
+    const payload = document.getElementById('payload').value.trim();
+    const responseEl = document.getElementById('response');
+    const extractEl = document.getElementById('extract');
+
+    if (!fileId) {
+        alert('请填写文件 ID');
+        return;
+    }
+
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) {
+            headers['Authorization'] = 'Bearer ' + token;
+        }
+
+        const modifyRes = await fetch(`${baseUrl}/api/audit/modify/${fileId}`, {
+            method: 'POST',
+            headers,
+            body: payload
+        });
+        const modifyText = await formatResponseText(modifyRes);
+        responseEl.textContent = modifyText;
+
+        const detailRes = await fetch(`${baseUrl}/api/review/${fileId}/detail`, { headers });
+        const detailText = await formatResponseText(detailRes);
+        extractEl.textContent = detailText;
+    } catch (err) {
+        responseEl.textContent = '请求失败: ' + err.message;
+        extractEl.textContent = '';
+    }
+}
+
+async function formatResponseText(res) {
+    const text = await res.text();
+    try {
+        return JSON.stringify(JSON.parse(text), null, 2);
+    } catch (err) {
+        return text || `${res.status} ${res.statusText}`;
+    }
+}
+</script>
+</body>
+</html>

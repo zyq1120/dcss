@@ -11,8 +11,10 @@ import cn.masu.dcs.vo.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -34,6 +36,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final DocumentFileMapper fileMapper;
     private final DocumentExtractMainMapper extractMainMapper;
     private final AuditRecordMapper auditRecordMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final int MIN_AUDIT_RECORDS = 2;
@@ -44,9 +47,44 @@ public class DashboardServiceImpl implements DashboardService {
     private static final long MILLIS_PER_SECOND = 1000;
     private static final long MILLIS_PER_MINUTE = 60000;
     private static final double DEFAULT_REVIEW_TIME_MINUTES = 5.5;
+    private static final String DASHBOARD_OVERVIEW_CACHE_KEY = "dashboard:overview";
+    private static final String DASHBOARD_TREND_CACHE_KEY_PREFIX = "dashboard:trend:";
+    private static final String DASHBOARD_FILE_TYPE_CACHE_KEY = "dashboard:fileTypeDistribution";
+    private static final String DASHBOARD_STATUS_CACHE_KEY = "dashboard:statusDistribution";
+    private static final Duration DASHBOARD_CACHE_TTL = Duration.ofMinutes(5);
+    private static final String CLASSIFICATION_TYPE_ZSET_KEY = "classification:type:zset";
+    private static final Duration CLASSIFICATION_CACHE_TTL = Duration.ofMinutes(10);
+
+    /**
+     * 安全获取Redis缓存，Redis不可用时返回null
+     */
+    private Object safeGetFromRedis(String key) {
+        try {
+            return redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.warn("Redis不可用，跳过缓存读取: key={}, error={}", key, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 安全写入Redis缓存，Redis不可用时静默失败
+     */
+    private void safeSetToRedis(String key, Object value, Duration ttl) {
+        try {
+            redisTemplate.opsForValue().set(key, value, ttl);
+        } catch (Exception e) {
+            log.warn("Redis不可用，跳过缓存写入: key={}, error={}", key, e.getMessage());
+        }
+    }
+
 
     @Override
     public DashboardOverviewVO getOverview() {
+        DashboardOverviewVO cached = (DashboardOverviewVO) safeGetFromRedis(DASHBOARD_OVERVIEW_CACHE_KEY);
+        if (cached != null) {
+            return cached;
+        }
         DashboardOverviewVO overview = new DashboardOverviewVO();
 
         // 文件统计
@@ -145,11 +183,17 @@ public class DashboardServiceImpl implements DashboardService {
 
         overview.setEfficiencyStats(efficiencyStats);
 
+        safeSetToRedis(DASHBOARD_OVERVIEW_CACHE_KEY, overview, DASHBOARD_CACHE_TTL);
         return overview;
     }
 
     @Override
     public DashboardTrendVO getTrend(Integer days) {
+        String cacheKey = DASHBOARD_TREND_CACHE_KEY_PREFIX + days;
+        DashboardTrendVO cached = (DashboardTrendVO) safeGetFromRedis(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
         DashboardTrendVO trend = new DashboardTrendVO();
 
         // 生成日期列表
@@ -230,6 +274,7 @@ public class DashboardServiceImpl implements DashboardService {
         trend.setFailCount(failCount);
         trend.setReviewCount(reviewCount);
 
+        safeSetToRedis(cacheKey, trend, DASHBOARD_CACHE_TTL);
         return trend;
     }
 
@@ -348,6 +393,10 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public FileTypeDistributionVO getFileTypeDistribution() {
+        FileTypeDistributionVO cached = (FileTypeDistributionVO) safeGetFromRedis(DASHBOARD_FILE_TYPE_CACHE_KEY);
+        if (cached != null) {
+            return cached;
+        }
         FileTypeDistributionVO distribution = new FileTypeDistributionVO();
 
         LambdaQueryWrapper<DocumentFile> wrapper = new LambdaQueryWrapper<>();
@@ -375,11 +424,16 @@ public class DashboardServiceImpl implements DashboardService {
         distribution.setCounts(counts);
         distribution.setPercentages(percentages);
 
+        safeSetToRedis(DASHBOARD_FILE_TYPE_CACHE_KEY, distribution, DASHBOARD_CACHE_TTL);
         return distribution;
     }
 
     @Override
     public StatusDistributionVO getStatusDistribution() {
+        StatusDistributionVO cached = (StatusDistributionVO) safeGetFromRedis(DASHBOARD_STATUS_CACHE_KEY);
+        if (cached != null) {
+            return cached;
+        }
         StatusDistributionVO distribution = new StatusDistributionVO();
 
         List<String> statusNames = Arrays.asList(
@@ -406,6 +460,7 @@ public class DashboardServiceImpl implements DashboardService {
         distribution.setCounts(counts);
         distribution.setPercentages(percentages);
 
+        safeSetToRedis(DASHBOARD_STATUS_CACHE_KEY, distribution, DASHBOARD_CACHE_TTL);
         return distribution;
     }
 
