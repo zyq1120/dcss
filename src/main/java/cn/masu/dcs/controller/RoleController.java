@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
  * @author zyq
  */
 @RestController
-@RequestMapping({"/api/role", "/api/roles"})
+@RequestMapping({"/api/role"})
 @RequiredArgsConstructor
 public class RoleController {
 

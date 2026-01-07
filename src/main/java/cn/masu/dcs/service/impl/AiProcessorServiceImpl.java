@@ -13,6 +13,7 @@ import cn.masu.dcs.service.AiProcessorService;
 import cn.masu.dcs.service.AiResultPersistenceService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,8 @@ public class AiProcessorServiceImpl implements AiProcessorService {
     private final DocumentFileMapper fileMapper;
     private final AiFileService aiFileService;
 
+    private static final ObjectMapper PY_MAPPER = new ObjectMapper()
+            .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     /**
      * AI结果持久化服务（独立事务服务，解决事务自调用问题）
      */
@@ -54,6 +57,31 @@ public class AiProcessorServiceImpl implements AiProcessorService {
     private static final int DEFAULT_MAP_CAPACITY = 8;
     private static final int FILE_INFO_MAP_CAPACITY = 4;
 
+    /**
+     * 文件扩展名常量
+     */
+    private static final String EXT_PDF = ".pdf";
+    private static final String EXT_PNG = ".png";
+    private static final String EXT_JPG = ".jpg";
+    private static final String EXT_JPEG = ".jpeg";
+    private static final String EXT_GIF = ".gif";
+    private static final String EXT_BMP = ".bmp";
+    private static final String EXT_TIFF = ".tiff";
+    private static final String EXT_TIF = ".tif";
+    private static final String EXT_WEBP = ".webp";
+
+    /**
+     * MIME 类型常量
+     */
+    private static final String MIME_PDF = "application/pdf";
+    private static final String MIME_PNG = "image/png";
+    private static final String MIME_JPEG = "image/jpeg";
+    private static final String MIME_GIF = "image/gif";
+    private static final String MIME_BMP = "image/bmp";
+    private static final String MIME_TIFF = "image/tiff";
+    private static final String MIME_WEBP = "image/webp";
+    private static final String MIME_OCTET_STREAM = "application/octet-stream";
+
     @Override
     public Map<String, Object> processDocument(AiDocProcessRequest request) {
         validateRequest(request);
@@ -62,8 +90,7 @@ public class AiProcessorServiceImpl implements AiProcessorService {
         String bucketName = null;
         String objectName = null;
         String fileUrl;
-        boolean newFileCreated = false;
-        Path tempFilePath = null;
+        String base64Content = null;
 
         try {
             // 处理文件
@@ -72,18 +99,22 @@ public class AiProcessorServiceImpl implements AiProcessorService {
             bucketName = fileResult.bucketName;
             objectName = fileResult.objectName;
             fileUrl = fileResult.fileUrl;
-            newFileCreated = fileResult.newFileCreated;
 
             // 确定文件名（优先使用数据库中的文件名，其次使用请求中的文件名）
             String effectiveFileName = fileResult.fileName != null ? fileResult.fileName : request.getFileName();
 
-            // 下载到临时路径供Python使用
-            if (bucketName != null && objectName != null) {
-                tempFilePath = downloadFileToTemp(bucketName, objectName, effectiveFileName);
+            // 获取文件的 Base64 内容用于传递给 Python
+            if (StringUtils.hasText(request.getFileContent())) {
+                // 前端直接传递的 Base64，直接使用
+                base64Content = request.getFileContent();
+            } else if (bucketName != null && objectName != null) {
+                // 从 MinIO 下载并转换为 Base64
+                base64Content = downloadFileAsBase64(bucketName, objectName, effectiveFileName);
             }
 
-            // 调用AI服务
-            JsonNode aiResult = callAiService(request, fileId, bucketName, objectName, fileUrl, tempFilePath);
+            // 调用AI服务（使用 Base64 方式）
+            JsonNode aiResult = callAiService(request, fileId, bucketName, objectName,
+                    fileUrl, base64Content, effectiveFileName);
 
             // 保存结果到数据库（通过独立的事务服务调用，确保事务生效）
             if (fileId != null) {
@@ -95,12 +126,19 @@ public class AiProcessorServiceImpl implements AiProcessorService {
 
         } catch (Exception e) {
             log.error("AI处理失败", e);
-            if (newFileCreated && fileId != null) {
+            /*
+             * 当Python端返回非正确状态码（AI处理失败）时，
+             * 无论是新上传的文件还是已存在的文件，都需要清理MinIO中的照片和数据库记录。
+             * 原因：
+             * 1. 避免产生无效的孤儿数据
+             * 2. 节省存储空间
+             * 3. 保持数据一致性
+             */
+            if (fileId != null) {
+                log.info("AI处理失败，开始清理文件: fileId={}, bucket={}, object={}", fileId, bucketName, objectName);
                 cleanupUploadedFile(fileId, bucketName, objectName);
             }
             throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "AI处理失败: " + e.getMessage());
-        } finally {
-            deleteTempFile(tempFilePath);
         }
     }
 
@@ -126,10 +164,10 @@ public class AiProcessorServiceImpl implements AiProcessorService {
         try {
             AIServiceClient.CostStatistics costStats = aiServiceClient.getCostStatistics();
             status.put("cost", Map.of(
-                "current", costStats.getCurrentCost(),
-                "budget", costStats.getDailyBudget(),
-                "remaining", costStats.getRemainingBudget(),
-                "usage_percentage", costStats.getUsagePercentage()
+                    "current", costStats.getCurrentCost(),
+                    "budget", costStats.getDailyBudget(),
+                    "remaining", costStats.getRemainingBudget(),
+                    "usage_percentage", costStats.getUsagePercentage()
             ));
         } catch (Exception e) {
             log.warn("获取成本统计失败", e);
@@ -152,7 +190,7 @@ public class AiProcessorServiceImpl implements AiProcessorService {
 
         if (!hasFileId && !hasFileContent && !hasText) {
             throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(),
-                "必须提供fileId、fileContent或text之一");
+                    "必须提供fileId、fileContent或text之一");
         }
     }
 
@@ -171,7 +209,7 @@ public class AiProcessorServiceImpl implements AiProcessorService {
             DocumentFile existingFile = fileMapper.selectById(requestFileId);
             if (existingFile == null) {
                 throw new BusinessException(ErrorCode.FILE_NOT_FOUND.getCode(),
-                    "文件不存在: fileId=" + requestFileId);
+                        "文件不存在: fileId=" + requestFileId);
             }
             result.fileId = requestFileId;
             result.bucketName = existingFile.getMinioBucket();
@@ -180,7 +218,6 @@ public class AiProcessorServiceImpl implements AiProcessorService {
             result.fileUrl = buildMinioUrl(result.bucketName, result.objectName);
         } else if (hasFileContent) {
             result.fileId = aiFileService.saveFileToMinioAndDatabase(request, request.getRequestId());
-            result.newFileCreated = true;
 
             DocumentFile savedFile = fileMapper.selectById(result.fileId);
             if (savedFile == null) {
@@ -197,17 +234,20 @@ public class AiProcessorServiceImpl implements AiProcessorService {
 
     /**
      * 调用AI服务
+     * <p>
+     * 统一使用 Base64 方式传递文件到 Python 端
+     * </p>
      */
     private JsonNode callAiService(AiDocProcessRequest request, Long fileId,
                                    String bucketName, String objectName, String fileUrl,
-                                   Path tempFilePath) {
+                                   String base64Content, String fileName) {
         Map<String, Object> pythonRequest = buildPythonRequest(request, fileId, bucketName,
-            objectName, fileUrl, tempFilePath != null ? tempFilePath.toString() : null);
+                objectName, fileUrl, base64Content, fileName);
 
         AIServiceClient.AIProcessResponse aiResponse = aiServiceClient.processUnifiedAi(pythonRequest);
 
         if (aiResponse == null) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "AI服务无返回结g果");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "AI服务无返回结果");
         }
         if (Boolean.FALSE.equals(aiResponse.getSuccess())) {
             String errorMsg = aiResponse.getErrorMessage() != null ? aiResponse.getErrorMessage() : "未知错误";
@@ -219,21 +259,42 @@ public class AiProcessorServiceImpl implements AiProcessorService {
 
     /**
      * 构建Python请求
+     * <p>
+     * 优先使用 Base64 (file_content) 方式传递文件，这样 Python 端可以直接处理
+     * </p>
      */
     private Map<String, Object> buildPythonRequest(AiDocProcessRequest request, Long fileId,
                                                    String bucketName, String objectName,
-                                                   String fileUrl, String localFilePath) {
+                                                   String fileUrl, String base64Content,
+                                                   String fileName) {
         Map<String, Object> pythonRequest = new HashMap<>(DEFAULT_MAP_CAPACITY);
 
+        // 优先使用 text（纯文本处理）
         if (StringUtils.hasText(request.getText())) {
             pythonRequest.put("text", request.getText().trim());
         }
-        if (StringUtils.hasText(request.getFileContent())) {
-            pythonRequest.put("file_content", request.getFileContent().trim());
+
+        // 使用 Base64 传递文件内容（核心改动：统一使用 file_content）
+        if (StringUtils.hasText(base64Content)) {
+            pythonRequest.put("file_content", base64Content);
+            log.info("使用Base64传递文件到Python端, 文件名: {}", fileName);
         }
+
+        // 传递文件名
+        if (StringUtils.hasText(fileName)) {
+            pythonRequest.put("file_name", fileName);
+        }
+
+        // 处理选项
         if (request.getOptions() != null) {
-            pythonRequest.put("options", request.getOptions());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> options =
+                    PY_MAPPER.convertValue(request.getOptions(), Map.class);
+            pythonRequest.put("options", options);
+            log.info("Python options payload = {}", pythonRequest.get("options"));
         }
+
+        // 文件元数据（供 Python 端记录或后续处理）
         if (fileId != null || bucketName != null) {
             Map<String, Object> fileMeta = new HashMap<>(FILE_INFO_MAP_CAPACITY);
             fileMeta.put("file_id", fileId);
@@ -241,9 +302,6 @@ public class AiProcessorServiceImpl implements AiProcessorService {
             fileMeta.put("object", objectName);
             fileMeta.put("url", fileUrl);
             pythonRequest.put("file_meta", fileMeta);
-        }
-        if (localFilePath != null) {
-            pythonRequest.put("file_path", localFilePath);
         }
 
         return pythonRequest;
@@ -289,11 +347,11 @@ public class AiProcessorServiceImpl implements AiProcessorService {
     }
 
     /**
-     * 转换MultipartFile为请求对�?
+     * 转换MultipartFile为请求?
      */
     private AiDocProcessRequest convertMultipartToRequest(MultipartFile file,
-                                                                  String optionsJson,
-                                                                  String templateConfigJson) throws IOException {
+                                                          String optionsJson,
+                                                          String templateConfigJson) throws IOException {
         byte[] bytes = file.getBytes();
         String base64 = Base64.getEncoder().encodeToString(bytes);
         String fileContent = "data:" + file.getContentType() + ";base64," + base64;
@@ -315,8 +373,64 @@ public class AiProcessorServiceImpl implements AiProcessorService {
     }
 
     /**
-     * 下载文件到临时目录
+     * 从 MinIO 下载文件并转换为 Base64
+     *
+     * @param bucketName       桶名
+     * @param objectName       对象名
+     * @param originalFileName 原始文件名（用于确定 MIME 类型）
+     * @return Base64 编码的文件内容（带 data URI 前缀）
      */
+    private String downloadFileAsBase64(String bucketName, String objectName, String originalFileName) {
+        try (InputStream inputStream = minioUtils.downloadFile(bucketName, objectName)) {
+            byte[] fileBytes = inputStream.readAllBytes();
+            String base64Data = Base64.getEncoder().encodeToString(fileBytes);
+
+            // 确定 MIME 类型
+            String mimeType = determineMimeType(originalFileName, objectName);
+
+            // 返回带 data URI 前缀的 Base64
+            String result = "data:" + mimeType + ";base64," + base64Data;
+            log.debug("文件转换为Base64成功: {}/{}, size={} bytes, mimeType={}",
+                    bucketName, objectName, fileBytes.length, mimeType);
+            return result;
+        } catch (Exception e) {
+            log.error("从MinIO下载文件并转换Base64失败: {}/{}", bucketName, objectName, e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "下载文件失败");
+        }
+    }
+
+    /**
+     * 根据文件名确定 MIME 类型
+     */
+    private String determineMimeType(String originalFileName, String objectName) {
+        String fileName = StringUtils.hasText(originalFileName) ? originalFileName : objectName;
+        if (fileName == null) {
+            return MIME_OCTET_STREAM;
+        }
+
+        String lowerName = fileName.toLowerCase();
+        if (lowerName.endsWith(EXT_PDF)) {
+            return MIME_PDF;
+        } else if (lowerName.endsWith(EXT_PNG)) {
+            return MIME_PNG;
+        } else if (lowerName.endsWith(EXT_JPG) || lowerName.endsWith(EXT_JPEG)) {
+            return MIME_JPEG;
+        } else if (lowerName.endsWith(EXT_GIF)) {
+            return MIME_GIF;
+        } else if (lowerName.endsWith(EXT_BMP)) {
+            return MIME_BMP;
+        } else if (lowerName.endsWith(EXT_TIFF) || lowerName.endsWith(EXT_TIF)) {
+            return MIME_TIFF;
+        } else if (lowerName.endsWith(EXT_WEBP)) {
+            return MIME_WEBP;
+        }
+        return MIME_OCTET_STREAM;
+    }
+
+    /**
+     * 下载文件到临时目录（保留作为备用方法）
+     */
+    @SuppressWarnings("unused")
     private Path downloadFileToTemp(String bucketName, String objectName, String originalFileName) {
         try (InputStream inputStream = minioUtils.downloadFile(bucketName, objectName)) {
             String suffix = "";
@@ -368,18 +482,6 @@ public class AiProcessorServiceImpl implements AiProcessorService {
         }
     }
 
-    /**
-     * 删除临时文件
-     */
-    private void deleteTempFile(Path tempFilePath) {
-        if (tempFilePath != null) {
-            try {
-                Files.deleteIfExists(tempFilePath);
-            } catch (Exception e) {
-                log.warn("删除临时文件失败: {}", tempFilePath, e);
-            }
-        }
-    }
 
     /**
      * 文件处理结果内部类
@@ -390,6 +492,5 @@ public class AiProcessorServiceImpl implements AiProcessorService {
         String objectName;
         String fileUrl;
         String fileName;
-        boolean newFileCreated;
     }
 }

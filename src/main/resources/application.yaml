@@ -36,7 +36,8 @@ minio:
 
 ai:
   service:
-    base-url: http://localhost:5000
+#    base-url: http://zyq.makeup:5000
+    base-url: http://127.0.0.1:5000
     enable-llm-fallback: true
     daily-budget: 20.0
     ocr-confidence-threshold: 0.7

@@ -5,6 +5,7 @@ import lombok.Data;
 
 /**
  * 处理选项 DTO。
+ * @author zyq
  */
 @Data
 public class AiProcessOptions {
@@ -19,13 +20,13 @@ public class AiProcessOptions {
     private Boolean llmOnly;
 
     @JsonProperty("disable_ai")
-    private Boolean disableAi;
+    private Boolean disableAi = false;
 
     @JsonProperty("use_llm")
     private Boolean useLlm;
 
     @JsonProperty("llm_image")
-    private Boolean llmImage;
+    private Boolean llmImage  = false;
 
     @JsonProperty("auto_infer_fields")
     private Boolean autoInferFields;
@@ -37,15 +38,15 @@ public class AiProcessOptions {
     private Boolean detectTable;
 
     @JsonProperty("table_force")
-    private Boolean tableForce;
+    private Boolean tableForce = false;
 
     @JsonProperty("table_detect_threshold")
     private Double tableDetectThreshold;
 
     @JsonProperty("llm_provider")
-    private String llmProvider;
+    private String llmProvider = "qwen-plus";
 
     @JsonProperty("llm_model")
-    private String llmModel;
+    private String llmModel = "qwen3-vl-plus";
 }
 

@@ -18,7 +18,7 @@ import java.util.Date;
  * @author zyq
  */
 @RestController
-@RequestMapping({"/api/task", "/api/tasks"})
+@RequestMapping("/api/task")
 @RequiredArgsConstructor
 public class TaskController {
 

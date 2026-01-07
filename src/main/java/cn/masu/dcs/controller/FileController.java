@@ -21,7 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
  * @author zyq
  */
 @RestController
-@RequestMapping({"/api/file", "/api/files"})
+@RequestMapping({"/api/file"})
 @RequiredArgsConstructor
 public class FileController {
 

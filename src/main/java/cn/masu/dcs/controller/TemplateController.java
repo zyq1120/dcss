@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
  * @author zyq
  */
 @RestController
-@RequestMapping({"/api/template", "/api/templates"})  // ✅ 同时支持单数和复数
+@RequestMapping({"/api/template"})
 @RequiredArgsConstructor
 public class TemplateController {
 

@@ -13,13 +13,10 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * 用户管理控制器
- * <p>
- * 同时支持 /api/user 和 /api/users 路径，保证向后兼容
- * </p>
  * @author System
  */
 @RestController
-@RequestMapping({"/api/user", "/api/users"})
+@RequestMapping({"/api/user"})
 @RequiredArgsConstructor
 public class UserController {
 
