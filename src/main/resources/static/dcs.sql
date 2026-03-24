@@ -3,8 +3,14 @@
  * MySQL 8.0+
  */
 
+
+create database dcs;
+use dcs;
+
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
+
+
 
 -- Drop in dependency order
 DROP TABLE IF EXISTS audit_record;
@@ -277,3 +283,11 @@ INSERT INTO sys_doc_template (
 );
 
 SET FOREIGN_KEY_CHECKS = 1;
+-- 修改的表列
+ALTER TABLE audit_record ADD COLUMN extract_main_id BIGINT COMMENT '提取主表ID';
+ALTER TABLE audit_record ADD COLUMN audit_status INT COMMENT '审核状态';
+ALTER TABLE audit_record ADD COLUMN audit_comment VARCHAR(500) COMMENT '审核意见';
+
+
+
+
