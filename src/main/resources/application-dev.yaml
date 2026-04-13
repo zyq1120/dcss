@@ -8,7 +8,7 @@ spring:
   #    password: newpassword
   data:
     redis:
-      host: 117.72.63.134
+      host: 
       port: 6379
       database: 3
       timeout: 10000
