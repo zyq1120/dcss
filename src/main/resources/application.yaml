@@ -28,7 +28,7 @@ jwt:
   expiration: 86400000
 
 minio:
-  endpoint: http://119.45.164.129:9000
+  endpoint:
   access-key: minio
   secret-key: minio123
   bucket-name: document-files
